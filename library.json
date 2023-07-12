@@ -1,6 +1,6 @@
 {
   "name": "uNeurai",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Brings Neurai to embedded devices. Write your own hardware wallet, vending machine or any other bitcoin-powered device. Supports public and private keys, HD wallets, transactions and scripts. Everything required to start working with Neurai on microcontrollers.",
   "keywords": "neurai, bitcoin, cryptography, xna",
   "repository":
@@ -11,9 +11,9 @@
   "authors":
   [
     {
-      "name": "Stepan Snigirev",
-      "email": "snigirev.stepan@gmail.com",
-      "url": "https://stepansnigirev.com"
+      "name": "Asimov",
+      "email": "web@neurai.org",
+      "url": "https://neurai.org"
     }
   ],
   "license": "MIT",
