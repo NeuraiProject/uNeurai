@@ -57,7 +57,7 @@ typedef struct{
     Script witnessScript;
 } PSBTOutputMetadata;
 
-/** \brief Calculates descriptor checksum for Bitcoin Core. */
+/** \brief Calculates descriptor checksum for Neurai Node. */
 size_t descriptorChecksum(const char * span, size_t spanLen, char * output, size_t outputSize);
 #if USE_ARDUINO_STRING
 String descriptorChecksum(String descriptor);

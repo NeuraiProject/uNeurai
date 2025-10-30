@@ -1,7 +1,7 @@
 # Paths
 BUILD_DIR = build
 SRC_DIR = .
-# uBitcoin library
+# uNeurai library
 LIB_DIR = ../src
 
 # Tools
@@ -19,7 +19,7 @@ endif
 CC := $(TOOLCHAIN_PREFIX)gcc
 CXX := $(TOOLCHAIN_PREFIX)g++
 
-# uBitcoin sources
+# uNeurai sources
 CXX_SOURCES += $(wildcard $(LIB_DIR)/*.cpp)
 C_SOURCES += $(wildcard $(LIB_DIR)/utility/trezor/*.c) \
 			$(wildcard $(LIB_DIR)/utility/*.c) \
@@ -28,7 +28,7 @@ C_SOURCES += $(wildcard $(LIB_DIR)/utility/trezor/*.c) \
 
 # include lib path, don't use mbed or arduino config (-DUSE_STDONLY)
 CFLAGS = -I$(LIB_DIR) -g
-CPPFLAGS = -I$(LIB_DIR) -DUSE_STDONLY -DUBTC_TEST -g
+CPPFLAGS = -I$(LIB_DIR) -DUSE_STDONLY -DUXNA_TEST -g
 
 OBJS = $(patsubst $(SRC_DIR)/%, $(BUILD_DIR)/src/%.o, \
 		$(patsubst $(LIB_DIR)/%, $(BUILD_DIR)/lib/%.o, \

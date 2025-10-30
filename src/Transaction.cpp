@@ -10,10 +10,10 @@ using std::string;
 #define String string
 #endif
 
-#define UBTC_ERR_TX_GLOBAL 1
-#define UBTC_ERR_TX_INPUT  2
-#define UBTC_ERR_TX_OUTPUT 3
-#define UBTC_ERR_TX_SCRIPT 4
+#define UXNA_ERR_TX_GLOBAL 1
+#define UXNA_ERR_TX_INPUT  2
+#define UXNA_ERR_TX_OUTPUT 3
+#define UXNA_ERR_TX_SCRIPT 4
 
 //-------------------------------------------------------------------------------------- Transaction Input
 void TxIn::init(){
@@ -98,7 +98,7 @@ size_t TxIn::from_stream(ParseStream *s){
     }
     if(scriptSig.getStatus() == PARSING_FAILED){
         status = PARSING_FAILED;
-        ubtc_errno = UBTC_ERR_TX_SCRIPT | UBTC_ERR_TX_INPUT;
+    uxna_errno = UXNA_ERR_TX_SCRIPT | UXNA_ERR_TX_INPUT;
         bytes_parsed+=bytes_read;
         return bytes_read;
     }
@@ -168,7 +168,7 @@ size_t TxOut::from_stream(ParseStream *s){
     }
     if(scriptPubkey.getStatus() == PARSING_FAILED){
         status = PARSING_FAILED;
-        ubtc_errno = UBTC_ERR_TX_SCRIPT | UBTC_ERR_TX_OUTPUT;
+    uxna_errno = UXNA_ERR_TX_SCRIPT | UXNA_ERR_TX_OUTPUT;
         bytes_parsed+=bytes_read;
         return bytes_read;
     }
@@ -445,7 +445,7 @@ size_t Tx::from_stream(ParseStream *s){
             }
             if(txIns[i].witness.getStatus() == PARSING_FAILED){
                 status = PARSING_FAILED;
-                ubtc_errno = UBTC_ERR_TX_GLOBAL | UBTC_ERR_TX_SCRIPT;
+                uxna_errno = UXNA_ERR_TX_GLOBAL | UXNA_ERR_TX_SCRIPT;
                 bytes_parsed+=bytes_read;
                 return bytes_read;
             }

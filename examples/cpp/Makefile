@@ -12,7 +12,7 @@ TARGET_EXEC ?= $(TARGET)$(EXT)
 # to make sure addprefix to LIB_DIR doesn't go out from build directory
 BUILD_DIR = build
 SRC_DIR = .
-# uBitcoin library
+# uNeurai library
 LIB_DIR = ../../src
 
 # Tools
@@ -34,7 +34,7 @@ CXX := $(TOOLCHAIN_PREFIX)g++
 CXX_SOURCES = $(wildcard $(SRC_DIR)/*.cpp)
 C_SOURCES =
 
-# uBitcoin sources
+# uNeurai sources
 CXX_SOURCES += $(wildcard $(LIB_DIR)/*.cpp)
 C_SOURCES += $(wildcard $(LIB_DIR)/utility/trezor/*.c) \
 			$(wildcard $(LIB_DIR)/utility/*.c) \
@@ -43,7 +43,7 @@ C_SOURCES += $(wildcard $(LIB_DIR)/utility/trezor/*.c) \
 # include lib path, don't use mbed or arduino config (-DUSE_STDONLY), debug symbols, all warnings as errors
 FLAGS = -I$(LIB_DIR) -g -Wall -Werror -ldl
 CFLAGS = $(FLAGS)
-CPPFLAGS = $(FLAGS) -DUSE_STDONLY -DUBTC_EXAMPLE
+CPPFLAGS = $(FLAGS) -DUSE_STDONLY -DUXNA_EXAMPLE
 
 OBJS = $(patsubst $(SRC_DIR)/%, $(BUILD_DIR)/src/%.o, \
 		$(patsubst $(LIB_DIR)/%, $(BUILD_DIR)/lib/%.o, \

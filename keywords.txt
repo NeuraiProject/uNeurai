@@ -17,7 +17,7 @@ sha512Hmac	KEYWORD2
 # Datatypes and classes (KEYWORD1)
 #######################################
 
-Bitcoin	KEYWORD1
+Neurai	KEYWORD1
 Hash	KEYWORD1
 Conversion	KEYWORD1
 OpCodes	KEYWORD1

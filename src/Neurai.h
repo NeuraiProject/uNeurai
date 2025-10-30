@@ -1,12 +1,12 @@
 /** @file Neurai.h
  */
 
-#ifndef __BITCOIN_H__
-#define __BITCOIN_H__
+#ifndef __NEURAI_H__
+#define __NEURAI_H__
 
-#include "uBitcoin_conf.h"
+#include "uNeurai_conf.h"
 #include "BaseClasses.h"
-#include "BitcoinCurve.h"
+#include "NeuraiCurve.h"
 #include "Conversion.h"
 #include "Networks.h"
 #include "utility/trezor/rand.h"
@@ -30,7 +30,7 @@
    - sidechannel for pubkey calculation - use rng
  */
 
-extern int ubtc_errno;
+extern int uxna_errno;
 
 // number of rounds for mnemonic to seed conversion
 #define PBKDF2_ROUNDS 2048
@@ -112,15 +112,15 @@ public:
     // do I need this?
     PublicKey(ECPoint p){ reset(); memcpy(point, p.point, 64); compressed=p.compressed; };
     /**
-     *  \brief Fills `addr` with legacy Pay-To-Pubkey-Hash address (P2PKH, `1...` for mainnet)
+     *  \brief Fills `addr` with legacy Pay-To-Pubkey-Hash address (P2PKH, usando el prefijo p2pkh de la red activa)
      */
     int legacyAddress(char * addr, size_t len, const Network * network = &DEFAULT_NETWORK) const;
     /**
-     *  \brief Fills `addr` with native segwit address (P2WPKH, `bc1...` for mainnet)
+     *  \brief Fills `addr` with native segwit address (P2WPKH, usando el prefijo Bech32 de la red activa cuando esté disponible)
      */
     int segwitAddress(char * addr, size_t len, const Network * network = &DEFAULT_NETWORK) const;
     /**
-     *  \brief Fills `addr` with nested segwit address (P2SH-P2WPKH, `3...` for mainnet)
+     *  \brief Fills `addr` with nested segwit address (P2SH-P2WPKH, usando el prefijo p2sh de la red activa)
      */
     int nestedSegwitAddress(char * addr, size_t len, const Network * network = &DEFAULT_NETWORK) const;
     /**
@@ -177,7 +177,7 @@ public:
     virtual size_t length() const{ return 32; };
     void setSecret(const uint8_t secret_arr[32]){ memcpy(num, secret_arr, 32); pubKey = *this * GeneratorPoint; };
 
-    /** \brief Pointer to the network to use. Mainnet or Testnet */
+    /** \brief Pointer to the network to use (Neurai o NeuraiTest) */
     const Network * network;
 
     /** \brief Writes the private key in Wallet Import Format */
@@ -609,7 +609,7 @@ public:
     /** \brief the output amount in satoshi */
     uint64_t amount;
     /** \brief returns the output amount in BTC */
-    float btcAmount(){ return (float)amount/1e8; };
+    float xnaAmount(){ return (float)amount/1e8; };
     /** \brief returns the address corresponding to the output script */
     size_t address(char * addr, size_t len, const Network * network = &DEFAULT_NETWORK) const{ return scriptPubkey.address(addr, len, network); };
 #if USE_ARDUINO_STRING
@@ -714,4 +714,4 @@ public:
     explicit operator bool() const{ return isValid(); };
 };
 
-#endif // __BITCOIN_H__
+#endif // __NEURAI_H__

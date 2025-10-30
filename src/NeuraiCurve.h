@@ -1,7 +1,7 @@
-#ifndef __BITCOIN_CURVE_H__
-#define __BITCOIN_CURVE_H__
+#ifndef __NEURAI_CURVE_H__
+#define __NEURAI_CURVE_H__
 
-#include "uBitcoin_conf.h"
+#include "uNeurai_conf.h"
 #include "BaseClasses.h"
 #include "utility/trezor/memzero.h"
 
@@ -129,4 +129,4 @@ ECPoint operator*(const ECScalar& d, const ECPoint& p);
 inline ECPoint operator*(const ECPoint& p, const ECScalar& d){ return d*p; };
 inline ECPoint operator/(const ECPoint& p, const ECScalar& d){ return (ECScalar(1)/d)*p; };
 
-#endif // __BITCOIN_CURVE_H__
+#endif // __NEURAI_CURVE_H__

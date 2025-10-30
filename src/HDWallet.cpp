@@ -243,7 +243,7 @@ int HDPrivateKey::fromSeed(const uint8_t * seed, size_t seedSize, const Network 
     init();
     uint8_t raw[64] = { 0 };
     SHA512 sha;
-    char key[] = "Bitcoin seed";
+    char key[] = "Neurai seed";
     sha.beginHMAC((uint8_t *)key, strlen(key));
     sha.write(seed, seedSize);
     sha.endHMAC(raw);
@@ -421,10 +421,10 @@ HDPrivateKey HDPrivateKey::child(uint32_t index, bool hardened) const{
         }
         if(depth == 1){
             if(index == (HARDENED_INDEX+1)){
-                child.network = &Testnet;
+                child.network = &NeuraiTest;
             }
             if(index == HARDENED_INDEX){
-                child.network = &Mainnet;
+                child.network = &Neurai;
             }
         }
         if(depth == 3 && type == MULTISIG){

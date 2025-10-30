@@ -5,13 +5,13 @@ using std::string;
 #define String string
 #endif
 
-#define UBTC_ERR_PSBT_MAGIC 1
-#define UBTC_ERR_PSBT_SCOPE 2
-#define UBTC_ERR_PSBT_KEY 	3
-#define UBTC_ERR_PSBT_VALUE 4
-#define UBTC_ERR_PSBT_TX    5
-#define UBTC_ERR_PSBT_IN    6
-#define UBTC_ERR_PSBT_OUT   7
+#define UXNA_ERR_PSBT_MAGIC 1
+#define UXNA_ERR_PSBT_SCOPE 2
+#define UXNA_ERR_PSBT_KEY 	3
+#define UXNA_ERR_PSBT_VALUE 4
+#define UXNA_ERR_PSBT_TX    5
+#define UXNA_ERR_PSBT_IN    6
+#define UXNA_ERR_PSBT_OUT   7
 
 // descriptor checksum from https://github.com/bitcoin/bitcoin/blob/master/src/script/descriptor.cpp
 uint64_t PolyMod(uint64_t c, int val){
@@ -133,7 +133,7 @@ size_t PSBT::from_stream(ParseStream *s){
         bytes_read++;
         if(c != prefix[bytes_read+bytes_parsed-1]){
             status = PARSING_FAILED;
-            ubtc_errno = UBTC_ERR_PSBT_MAGIC;
+            uxna_errno = UXNA_ERR_PSBT_MAGIC;
             bytes_parsed += bytes_read;
             return bytes_read;
         }
@@ -148,7 +148,7 @@ size_t PSBT::from_stream(ParseStream *s){
     }
     if(key.getStatus() == PARSING_FAILED){
         status = PARSING_FAILED;
-        ubtc_errno = UBTC_ERR_PSBT_KEY;
+    uxna_errno = UXNA_ERR_PSBT_KEY;
         bytes_parsed += bytes_read;
         return bytes_read;
     }
@@ -157,7 +157,7 @@ size_t PSBT::from_stream(ParseStream *s){
     }
     if(value.getStatus() == PARSING_FAILED){
         status = PARSING_FAILED;
-        ubtc_errno = UBTC_ERR_PSBT_VALUE;
+    uxna_errno = UXNA_ERR_PSBT_VALUE;
         bytes_parsed += bytes_read;
         return bytes_read;
     }
@@ -167,7 +167,7 @@ size_t PSBT::from_stream(ParseStream *s){
         key.serialize(arr, key.length());
         if(key.length() != 2 || arr[0] != 1 || arr[1] != 0){
             status = PARSING_FAILED;
-            ubtc_errno = UBTC_ERR_PSBT_SCOPE;
+            uxna_errno = UXNA_ERR_PSBT_SCOPE;
         }
         free(arr);
         if(status == PARSING_FAILED){
@@ -218,7 +218,7 @@ size_t PSBT::from_stream(ParseStream *s){
         }
         if(key.getStatus() == PARSING_FAILED || value.getStatus() == PARSING_FAILED){
             status = PARSING_FAILED;
-            ubtc_errno = (key.getStatus() == PARSING_FAILED) ? UBTC_ERR_PSBT_KEY : UBTC_ERR_PSBT_VALUE;
+            uxna_errno = (key.getStatus() == PARSING_FAILED) ? UXNA_ERR_PSBT_KEY : UXNA_ERR_PSBT_VALUE;
             bytes_parsed += bytes_read;
             return bytes_read;
         }
@@ -232,7 +232,7 @@ size_t PSBT::from_stream(ParseStream *s){
             int res = add(current_section, &key, &value);
             if(res < 0){
                 status = PARSING_FAILED;
-                ubtc_errno = UBTC_ERR_PSBT_SCOPE;
+                uxna_errno = UXNA_ERR_PSBT_SCOPE;
                 bytes_parsed += bytes_read;
                 return bytes_read;
             }

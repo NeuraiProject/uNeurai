@@ -21,7 +21,7 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-// Node: heavily edited by uBitcoin developers with inspiration from micropython source code.
+// Note: heavily edited by uNeurai developers with inspiration from micropython source code.
 
 #include "rand.h"
 #include "sha2.h"
@@ -82,7 +82,7 @@
   #else
 
     // fallback to prng
-    #define UBTC_USE_PRNG
+  #define UXNA_USE_PRNG
 
   #endif // defined RNG
 
@@ -99,12 +99,12 @@ uint32_t __attribute__((weak)) random32(void){
 #else
 
 // fallback to prng
-#define UBTC_USE_PRNG
+#define UXNA_USE_PRNG
 
 #endif
 
 // fallback option if no RNG on this platform
-#ifdef UBTC_USE_PRNG
+#ifdef UXNA_USE_PRNG
 
 #pragma message("\nWARGNING! RANDOM NUMBER GENERATOR IS NOT SUPPORTED ON THIS PLATFORM! \n\
 Pseudo-random generator will be used unless you define\n\
@@ -130,7 +130,7 @@ uint32_t __attribute__((weak)) random32(void) {
     return pad ^ (d << 5) ^ (pad >> 18) ^ (dat << 1);
 }
 
-#endif // UBTC_USE_PRNG
+#endif // UXNA_USE_PRNG
 
 //
 // The following code is platform independent

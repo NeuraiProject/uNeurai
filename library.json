@@ -1,8 +1,8 @@
 {
   "name": "uNeurai",
-  "version": "0.0.2",
-  "description": "Brings Neurai to embedded devices. Write your own hardware wallet, vending machine or any other bitcoin-powered device. Supports public and private keys, HD wallets, transactions and scripts. Everything required to start working with Neurai on microcontrollers.",
-  "keywords": "neurai, bitcoin, cryptography, xna",
+  "version": "0.1.0",
+  "description": "Brings Neurai to embedded devices. Write your own hardware wallet, vending machine or any other neurai-powered device. Supports public and private keys, HD wallets, transactions and scripts. Everything required to start working with Neurai on microcontrollers.",
+  "keywords": "neurai, cryptography, xna",
   "repository":
   {
     "type": "git",

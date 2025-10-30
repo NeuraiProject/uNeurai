@@ -4,7 +4,7 @@
 #ifndef __HASH_H__18NLNNCSJ2
 #define __HASH_H__18NLNNCSJ2
 
-#include "uBitcoin_conf.h"
+#include "uNeurai_conf.h"
 #include "BaseClasses.h"
 #include <stdint.h>
 #include <string.h>

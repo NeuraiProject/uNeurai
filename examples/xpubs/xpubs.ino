@@ -1,5 +1,5 @@
 /*
- * This example shows how to derive bitcoin addresses from the master public key (bip32)
+ * This example shows how to derive Neurai addresses from the master public key (bip32)
  * Enter account master public key to the serial console and get the addresses
  * Use this tool to check: https://iancoleman.io/bip39/
  */

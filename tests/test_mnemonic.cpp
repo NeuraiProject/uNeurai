@@ -1,4 +1,4 @@
-#ifdef UBTC_TEST // only compile with test flag
+#ifdef UXNA_TEST // only compile with test flag
 
 #include "minunit.h"
 #include "Neurai.h"
@@ -24,4 +24,4 @@ int main(int argc, char *argv[]) {
   return MU_EXIT_CODE;
 }
 
-#endif // UBTC_TEST
+#endif // UXNA_TEST

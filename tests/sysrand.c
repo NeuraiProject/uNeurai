@@ -1,4 +1,4 @@
-#ifdef UBTC_TEST // only compile with test flag
+#ifdef UXNA_TEST // only compile with test flag
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -8,4 +8,4 @@ uint32_t random32(void){
     return (uint32_t)rand();
 }
 
-#endif // UBTC_TEST
+#endif // UXNA_TEST

@@ -1,9 +1,9 @@
-#ifndef __UBTC_NETWORKS_H__
-#define __UBTC_NETWORKS_H__
+#ifndef __UXNA_NETWORKS_H__
+#define __UXNA_NETWORKS_H__
 
 #include <stdint.h>
 
-/** \brief Prefixes for particular network (Mainnet / Testnet ).<br>
+/** \brief Prefixes para cada red soportada por Neurai.<br>
  *  HD key prefixes are described here:<br>
  *  https://github.com/satoshilabs/slips/blob/master/slip-0132.md<br>
  *  useful tool: in https://iancoleman.io/bip39/
@@ -13,7 +13,7 @@ typedef struct {
     uint8_t p2pkh;   
     /** \brief Pay-To-Script-Hash addresses */
     uint8_t p2sh;    
-    /** \brief Prefix for segwit addreses ...for regtest it is larger */
+    /** \brief Prefix for segwit addreses (cadena Bech32 propia de la red) */
     char bech32[5];  
     /** \brief Wallet Import Format, used in PrivateKey */
     uint8_t wif;     
@@ -42,13 +42,9 @@ typedef struct {
 } Network;
 
 extern const Network Neurai;
+extern const Network NeuraiHW;
 extern const Network NeuraiTest;
-extern const Network Mainnet;
-extern const Network Testnet;
-extern const Network Regtest;
-extern const Network Signet;
-
 extern const Network * networks[];
 extern const uint8_t networks_len;
 
-#endif // __UBTC_NETWORKS_H__
+#endif // __UXNA_NETWORKS_H__

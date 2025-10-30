@@ -13,7 +13,7 @@ void setup() {
 
   TxIn txIn("fbeae5f43d76fc3035cb4190baaf8cc123dd04f11c98c8f19a8b12cb4ce90db0", 0);
 
-  // addresses to send bitcoins
+  // addresses to send neurais
   char destination[] = "n3DN9cswq5jnXXUmLP3bXtR89yfDNWrie9";
   String change = privateKey.address();
 

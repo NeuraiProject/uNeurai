@@ -1,7 +1,7 @@
-#ifndef __BITCOIN_BASE_CLASSES_H__
-#define __BITCOIN_BASE_CLASSES_H__
+#ifndef __NEURAI_BASE_CLASSES_H__
+#define __NEURAI_BASE_CLASSES_H__
 
-#include "uBitcoin_conf.h"
+#include "uNeurai_conf.h"
 #include "Conversion.h"
 
 #include <stdint.h>
@@ -177,4 +177,4 @@ public:
 #endif
 };
 
-#endif // __BITCOIN_BASE_CLASSES_H__
+#endif // __NEURAI_BASE_CLASSES_H__

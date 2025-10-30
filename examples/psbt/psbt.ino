@@ -32,7 +32,7 @@ void setup() {
       }
     }
     Serial.print(" -> ");
-    Serial.print(psbt.tx.txOuts[i].btcAmount()*1e3);
+    Serial.print(psbt.tx.txOuts[i].xnaAmount()*1e3);
     Serial.println(" mBTC");
   }
   Serial.print("Fee: ");
@@ -40,7 +40,7 @@ void setup() {
   Serial.println(" bits");
   
   psbt.sign(hd);
-  Serial.println(psbt.toBase64()); // now you can combine and finalize PSBTs in Bitcoin Core
+  Serial.println(psbt.toBase64()); // now you can combine and finalize PSBTs in Neurai Node
 }
 
 void loop() {

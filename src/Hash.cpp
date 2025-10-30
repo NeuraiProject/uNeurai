@@ -70,7 +70,7 @@ int sha256(const String data, uint8_t hash[32]){
 #endif
 
 int sha256Hmac(const uint8_t * key, size_t keyLen, const uint8_t * data, size_t dataLen, uint8_t hash[32]){
-    ubtc_hmac_sha256(key, keyLen, data, dataLen, hash);
+    uxna_hmac_sha256(key, keyLen, data, dataLen, hash);
     return 32;
 }
 
@@ -78,7 +78,7 @@ void SHA256::begin(){
     sha256_Init(&ctx.ctx);
 };
 void SHA256::beginHMAC(const uint8_t * key, size_t keySize){
-    ubtc_hmac_sha256_Init(&ctx, key, keySize);
+    uxna_hmac_sha256_Init(&ctx, key, keySize);
 }
 size_t SHA256::write(const uint8_t * data, size_t len){
     sha256_Update(&ctx.ctx, data, len);
@@ -94,7 +94,7 @@ size_t SHA256::end(uint8_t hash[32]){
     return 32;
 }
 size_t SHA256::endHMAC(uint8_t hmac[32]){
-    ubtc_hmac_sha256_Final(&ctx, hmac);
+    uxna_hmac_sha256_Final(&ctx, hmac);
     return 32;
 }
 
@@ -166,7 +166,7 @@ void SHA512::begin(){
     sha512_Init(&ctx.ctx);
 };
 void SHA512::beginHMAC(const uint8_t * key, size_t keySize){
-    ubtc_hmac_sha512_Init(&ctx, key, keySize);
+    uxna_hmac_sha512_Init(&ctx, key, keySize);
 }
 size_t SHA512::write(const uint8_t * data, size_t len){
     sha512_Update(&ctx.ctx, data, len);
@@ -182,11 +182,11 @@ size_t SHA512::end(uint8_t hash[64]){
     return 64;
 }
 size_t SHA512::endHMAC(uint8_t hmac[64]){
-    ubtc_hmac_sha512_Final(&ctx, hmac);
+    uxna_hmac_sha512_Final(&ctx, hmac);
     return 64;
 }
 
 int sha512Hmac(const uint8_t * key, size_t keyLen, const uint8_t * data, size_t dataLen, uint8_t hash[64]){
-    ubtc_hmac_sha512(key, keyLen, data, dataLen, hash);
+    uxna_hmac_sha512(key, keyLen, data, dataLen, hash);
     return 64;
 }

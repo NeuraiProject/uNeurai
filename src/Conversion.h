@@ -1,7 +1,7 @@
 #ifndef __CONVERSION_H__
 #define __CONVERSION_H__
 
-#include "uBitcoin_conf.h"
+#include "uNeurai_conf.h"
 
 #include <string.h>
 #include <stdint.h>

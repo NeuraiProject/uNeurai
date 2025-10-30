@@ -49,7 +49,7 @@ void setup() {
 
   // sha512-hmac
   // here we use more c-style approach
-  char key[] = "Bitcoin seed";
+  char key[] = "Neurai seed";
   hashLen = sha512Hmac((byte*)key, strlen(key), (byte*)message.c_str(), message.length(), hash);
   Serial.println("Sha512-HMAC: " + toHex(hash, hashLen));
   Serial.println("Should be:   f7fc496a2c17bd09a6328124dc6edebed987e7e93903deee0633a756f1ee81da0753334f6cfe226b5c712d893a68c547d3a5497cd73e1d010670c1e0e9d93a8a");

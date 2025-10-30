@@ -1,4 +1,4 @@
-#ifdef UBTC_TEST // only compile with test flag
+#ifdef UXNA_TEST // only compile with test flag
 
 #include "minunit.h"
 #include "Hash.h"  // all single-line hashing algorithms
@@ -74,4 +74,4 @@ int main(int argc, char *argv[]) {
   return MU_EXIT_CODE;
 }
 
-#endif // UBTC_TEST
+#endif // UXNA_TEST

@@ -1,7 +1,7 @@
 # Micro-Neurai
 
-C++ Bitcoin library for 32-bit microcontrollers. The library supports [Arduino IDE](https://www.arduino.cc/), [ARM mbed](https://www.mbed.com/en/) and bare metal.<br>
-It provides a collection of convenient classes for Bitcoin: private and public keys, HD wallets, generation of the recovery phrases, PSBT transaction formats, scripts — everything required for a hardware wallet or other bitcoin-powered device.
+C++ Neurai library for 32-bit microcontrollers. The library supports [Arduino IDE](https://www.arduino.cc/), [ARM mbed](https://www.mbed.com/en/) and bare metal.<br>
+It provides a collection of convenient classes for Neurai: private and public keys, HD wallets, generation of the recovery phrases, PSBT transaction formats, scripts — everything required for a hardware wallet or other neurai-powered device.
 
 The library should work on any decent 32-bit microcontroller, like esp32, riscV, stm32 series and others. It *doesn't work* on 8-bit microcontrollers like a classic Arduino as these microcontrollers are not powerful enough to run complicated crypto algorithms.
 
@@ -15,19 +15,19 @@ Telegram group: https://t.me/neuraiproject
 
 ## Alternative libraries
 
-[DIY Bitcoin Hardware website](https://diybitcoinhardware.com/) has a nice collection of bitcoin-related projects, resources and libraries for makers.
+[DIY Neurai Hardware website](https://diybitcoinhardware.com/) has a nice collection of neurai-related projects, resources and libraries for makers.
 
-A few bitcoin libraries:
+A few Neurai libraries:
 
-- [secp256k1](https://github.com/bitcoin-core/secp256k1) — elliptic curve library  from Bitcoin Core and a [version](https://github.com/diybitcoinhardware/secp256k1-embedded) working with Arduino IDE & Mbed out of the box.
-- [libwally](https://github.com/ElementsProject/libwally-core/) - bitcoin library from Blockstream and a [version](https://github.com/diybitcoinhardware/libwally-embedded) working with Arduino IDE.
-- [f469-disco](https://github.com/diybitcoinhardware/f469-disco) - micropython bitcoin bundle for STM Discovery board and other platforms.
+- [secp256k1](https://github.com/bitcoin-core/secp256k1) — elliptic curve library  from Neurai Node and a [version](https://github.com/diybitcoinhardware/secp256k1-embedded) working with Arduino IDE & Mbed out of the box.
+- [libwally](https://github.com/ElementsProject/libwally-core/) - Neurai library from Blockstream and a [version](https://github.com/diybitcoinhardware/libwally-embedded) working with Arduino IDE.
+- [f469-disco](https://github.com/diybitcoinhardware/f469-disco) - micropython Neurai bundle for STM Discovery board and other platforms.
 
 ## Installation
 
-The library is [available](https://www.arduino.cc/reference/en/libraries/ubitcoin/) in the Arduino Library manager, or you can download and install it manually.
+You can download the latest release manually from this repository.
 
-[Download](https://github.com/micro-bitcoin/uBitcoin/archive/master.zip) the zip file from our [repository](https://github.com/micro-bitcoin/uBitcoin/) and select in Arduino IDE `Sketch` → `Include library` → `Add .ZIP library...`.
+[Download](https://github.com/NeuraiProject/uNeurai/archive/refs/heads/main.zip) the zip file from our [repository](https://github.com/NeuraiProject/uNeurai/) and select in Arduino IDE `Sketch` → `Include library` → `Add .ZIP library...`.
 
 Or clone it into your `Documents/Arduino/libraries` folder:
 
@@ -35,7 +35,7 @@ Or clone it into your `Documents/Arduino/libraries` folder:
 git clone https://github.com/NeuraiProject/uNeurai.git
 ```
 
-When installed you will also see a few examples in `File` → `Examples` → `Bitcoin` menu.
+When installed you will also see a few examples in `File` → `Examples` → `Neurai` menu.
 
 ## Basic usage example
 

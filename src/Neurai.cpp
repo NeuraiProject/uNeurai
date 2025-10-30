@@ -18,7 +18,7 @@ using std::string;
 #endif
 
 // error code when parsing fails
-int ubtc_errno = 0;
+int uxna_errno = 0;
 
 const char * generateMnemonic(uint8_t numWords){
     if(numWords<12 || numWords > 24 || numWords % 3 != 0){

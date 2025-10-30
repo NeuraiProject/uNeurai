@@ -1,8 +1,8 @@
-#ifndef __UBITCOIN_CONF_H__
-#define __UBITCOIN_CONF_H__
+#ifndef __UNEURAI_CONF_H__
+#define __UNEURAI_CONF_H__
 
 /* Change this if you want to have other network by default */
-//#define DEFAULT_NETWORK Mainnet
+//#define DEFAULT_NETWORK NeuraiTest
 #define DEFAULT_NETWORK Neurai
 
 /* Change this config file to adjust to your framework */
@@ -56,4 +56,4 @@
 // using std::string;
 #endif
 
-#endif //__UBITCOIN_CONF_H__
+#endif //__UNEURAI_CONF_H__

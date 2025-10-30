@@ -1,10 +1,10 @@
 /*
- * A simple example showing how to work with uBitcoin in c++ on a PC
+ * A simple example showing how to work with uNeurai in c++ on a PC
  */
 
-// only compile when UBTC_EXAMPLE flag is provided
+// only compile when UXNA_EXAMPLE flag is provided
 // to not clash with platformio's compile-everything approach
-#ifdef UBTC_EXAMPLE
+#ifdef UXNA_EXAMPLE
 
 #include <iostream>
 #include "Neurai.h"
@@ -70,15 +70,15 @@ int main() {
                 cout << " (change) ";
             }
         }
-        cout << " -> " << psbt.tx.txOuts[i].btcAmount()*1e3 << " mBTC" << endl;
+        cout << " -> " << psbt.tx.txOuts[i].xnaAmount()*1e3 << " mBTC" << endl;
     }
     cout << "Fee: " << psbt.fee() << " sat" << endl;
 
     // sign using our key
     psbt.sign(hd);
-    cout << "Signed transaction:" << endl << psbt.toBase64() << endl; // now you can combine and finalize PSBTs in Bitcoin Core
+    cout << "Signed transaction:" << endl << psbt.toBase64() << endl; // now you can combine and finalize PSBTs in Neurai Node
 
     return 0;
 }
 
-#endif // UBTC_EXAMPLE
+#endif // UXNA_EXAMPLE

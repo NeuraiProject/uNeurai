@@ -30,7 +30,7 @@
 #define CONFIDENTIAL
 #endif
 
-void ubtc_hmac_sha256_Init(HMAC_SHA256_CTX *hctx, const uint8_t *key, const uint32_t keylen)
+void uxna_hmac_sha256_Init(HMAC_SHA256_CTX *hctx, const uint8_t *key, const uint32_t keylen)
 {
 	static CONFIDENTIAL uint8_t i_key_pad[SHA256_BLOCK_LENGTH];
 	memset(i_key_pad, 0, SHA256_BLOCK_LENGTH);
@@ -48,12 +48,12 @@ void ubtc_hmac_sha256_Init(HMAC_SHA256_CTX *hctx, const uint8_t *key, const uint
 	memzero(i_key_pad, sizeof(i_key_pad));
 }
 
-void ubtc_hmac_sha256_Update(HMAC_SHA256_CTX *hctx, const uint8_t *msg, const uint32_t msglen)
+void uxna_hmac_sha256_Update(HMAC_SHA256_CTX *hctx, const uint8_t *msg, const uint32_t msglen)
 {
 	sha256_Update(&(hctx->ctx), msg, msglen);
 }
 
-void ubtc_hmac_sha256_Final(HMAC_SHA256_CTX *hctx, uint8_t *hmac)
+void uxna_hmac_sha256_Final(HMAC_SHA256_CTX *hctx, uint8_t *hmac)
 {
 	sha256_Final(&(hctx->ctx), hmac);
 	sha256_Init(&(hctx->ctx));
@@ -63,15 +63,15 @@ void ubtc_hmac_sha256_Final(HMAC_SHA256_CTX *hctx, uint8_t *hmac)
 	memzero(hctx, sizeof(HMAC_SHA256_CTX));
 }
 
-void ubtc_hmac_sha256(const uint8_t *key, const uint32_t keylen, const uint8_t *msg, const uint32_t msglen, uint8_t *hmac)
+void uxna_hmac_sha256(const uint8_t *key, const uint32_t keylen, const uint8_t *msg, const uint32_t msglen, uint8_t *hmac)
 {
 	static CONFIDENTIAL HMAC_SHA256_CTX hctx;
-	ubtc_hmac_sha256_Init(&hctx, key, keylen);
-	ubtc_hmac_sha256_Update(&hctx, msg, msglen);
-	ubtc_hmac_sha256_Final(&hctx, hmac);
+	uxna_hmac_sha256_Init(&hctx, key, keylen);
+	uxna_hmac_sha256_Update(&hctx, msg, msglen);
+	uxna_hmac_sha256_Final(&hctx, hmac);
 }
 
-void ubtc_hmac_sha256_prepare(const uint8_t *key, const uint32_t keylen, uint32_t *opad_digest, uint32_t *ipad_digest)
+void uxna_hmac_sha256_prepare(const uint8_t *key, const uint32_t keylen, uint32_t *opad_digest, uint32_t *ipad_digest)
 {
 	static CONFIDENTIAL uint32_t key_pad[SHA256_BLOCK_LENGTH/sizeof(uint32_t)];
 
@@ -105,7 +105,7 @@ void ubtc_hmac_sha256_prepare(const uint8_t *key, const uint32_t keylen, uint32_
 	memzero(key_pad, sizeof(key_pad));
 }
 
-void ubtc_hmac_sha512_Init(HMAC_SHA512_CTX *hctx, const uint8_t *key, const uint32_t keylen)
+void uxna_hmac_sha512_Init(HMAC_SHA512_CTX *hctx, const uint8_t *key, const uint32_t keylen)
 {
 	static CONFIDENTIAL uint8_t i_key_pad[SHA512_BLOCK_LENGTH];
 	memset(i_key_pad, 0, SHA512_BLOCK_LENGTH);
@@ -123,12 +123,12 @@ void ubtc_hmac_sha512_Init(HMAC_SHA512_CTX *hctx, const uint8_t *key, const uint
 	memzero(i_key_pad, sizeof(i_key_pad));
 }
 
-void ubtc_hmac_sha512_Update(HMAC_SHA512_CTX *hctx, const uint8_t *msg, const uint32_t msglen)
+void uxna_hmac_sha512_Update(HMAC_SHA512_CTX *hctx, const uint8_t *msg, const uint32_t msglen)
 {
 	sha512_Update(&(hctx->ctx), msg, msglen);
 }
 
-void ubtc_hmac_sha512_Final(HMAC_SHA512_CTX *hctx, uint8_t *hmac)
+void uxna_hmac_sha512_Final(HMAC_SHA512_CTX *hctx, uint8_t *hmac)
 {
 	sha512_Final(&(hctx->ctx), hmac);
 	sha512_Init(&(hctx->ctx));
@@ -138,15 +138,15 @@ void ubtc_hmac_sha512_Final(HMAC_SHA512_CTX *hctx, uint8_t *hmac)
 	memzero(hctx, sizeof(HMAC_SHA512_CTX));
 }
 
-void ubtc_hmac_sha512(const uint8_t *key, const uint32_t keylen, const uint8_t *msg, const uint32_t msglen, uint8_t *hmac)
+void uxna_hmac_sha512(const uint8_t *key, const uint32_t keylen, const uint8_t *msg, const uint32_t msglen, uint8_t *hmac)
 {
 	HMAC_SHA512_CTX hctx;
-	ubtc_hmac_sha512_Init(&hctx, key, keylen);
-	ubtc_hmac_sha512_Update(&hctx, msg, msglen);
-	ubtc_hmac_sha512_Final(&hctx, hmac);
+	uxna_hmac_sha512_Init(&hctx, key, keylen);
+	uxna_hmac_sha512_Update(&hctx, msg, msglen);
+	uxna_hmac_sha512_Final(&hctx, hmac);
 }
 
-void ubtc_hmac_sha512_prepare(const uint8_t *key, const uint32_t keylen, uint64_t *opad_digest, uint64_t *ipad_digest)
+void uxna_hmac_sha512_prepare(const uint8_t *key, const uint32_t keylen, uint64_t *opad_digest, uint64_t *ipad_digest)
 {
 	static CONFIDENTIAL uint64_t key_pad[SHA512_BLOCK_LENGTH/sizeof(uint64_t)];
 

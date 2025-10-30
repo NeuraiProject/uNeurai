@@ -1,4 +1,4 @@
-#include "BitcoinCurve.h"
+#include "NeuraiCurve.h"
 #include "Conversion.h"
 #include "utility/trezor/rfc6979.h"
 #include "utility/trezor/ecdsa.h"
