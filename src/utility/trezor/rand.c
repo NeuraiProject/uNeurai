@@ -27,10 +27,14 @@
 #include "sha2.h"
 #include <string.h>
 
+#if defined(ESP_PLATFORM)
+#include <esp_system.h>
+extern uint32_t esp_random(void);
+#endif
+
 // esp boards
 #if defined(ESP_PLATFORM)
 
-  #include <esp_system.h>
   uint32_t __attribute__((weak)) random32(void){
     return esp_random();
   }

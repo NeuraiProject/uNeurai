@@ -1,6 +1,7 @@
 # Micro-Neurai
 
 C++ Neurai library for 32-bit microcontrollers. The library supports [Arduino IDE](https://www.arduino.cc/), [ARM mbed](https://www.mbed.com/en/) and bare metal.<br>
+This project builds on the uBitcoin codebase, adapting it for Neurai hardware and tooling.
 It provides a collection of convenient classes for Neurai: private and public keys, HD wallets, generation of the recovery phrases, PSBT transaction formats, scripts — everything required for a hardware wallet or other neurai-powered device.
 
 The library should work on any decent 32-bit microcontroller, like esp32, riscV, stm32 series and others. It *doesn't work* on 8-bit microcontrollers like a classic Arduino as these microcontrollers are not powerful enough to run complicated crypto algorithms.
@@ -9,19 +10,9 @@ We use elliptic curve implementation from [trezor-crypto](https://github.com/tre
 
 ## Documentation
 
-Check out our [tutorial](https://micro-bitcoin.github.io/#/tutorial/README) where we write a minimal hardware wallet, or browse the [API docs](https://micro-bitcoin.github.io/#/api/README). We also have a collection of [recepies](https://micro-bitcoin.github.io/#/recepies/README) for some common use-cases.
+In progress...
 
 Telegram group: https://t.me/neuraiproject
-
-## Alternative libraries
-
-[DIY Neurai Hardware website](https://diybitcoinhardware.com/) has a nice collection of neurai-related projects, resources and libraries for makers.
-
-A few Neurai libraries:
-
-- [secp256k1](https://github.com/bitcoin-core/secp256k1) — elliptic curve library  from Neurai Node and a [version](https://github.com/diybitcoinhardware/secp256k1-embedded) working with Arduino IDE & Mbed out of the box.
-- [libwally](https://github.com/ElementsProject/libwally-core/) - Neurai library from Blockstream and a [version](https://github.com/diybitcoinhardware/libwally-embedded) working with Arduino IDE.
-- [f469-disco](https://github.com/diybitcoinhardware/f469-disco) - micropython Neurai bundle for STM Discovery board and other platforms.
 
 ## Installation
 
@@ -61,19 +52,17 @@ Now we can write a simple example that does the following:
 // derive master private key
 HDPrivateKey hd("add good charge eagle walk culture book inherit fan nature seek repair", "");
 // derive native segwit account (bip-84) for tesnet
-HDPrivateKey account = hd.derive("m/84'/1'/0'/");
-// print xpub: vpub5YkPqVJTA7gjK...AH2rXvcAe3p781G
+HDPrivateKey account = hd.derive("m/44'/0'/0'/");
+// print xpub: xpub6DBgMq857cJ4ByRimVBYqUkVqSw6MBoSrm...HDp2vfhrvRpT52HRNfFm1QE6v3Gtxu
 Serial.println(account.xpub());
 // or change the account type to UNKNOWN_TYPE to get tpub
 HDPublicKey xpub = account.xpub();
-xpub.type = UNKNOWN_TYPE;
-// this time prints tpubDCnYy4Ty...dL4fLKsBFjFQwz
+// this time prints xpub6DBgMq857cJ4ByRimVBYqUkVqSw6MBoSrm...HDp2vfhrvRpT52HRNfFm1QE6v3Gtxu
 Serial.println(xpub);
-// set back correct type to get segwit addresses by default
-xpub.type = P2WPKH;
+// Returns the BIP-32 fingerprint (the first 4 bytes of the key’s hash160)
 Serial.println(hd.fingerprint());
 
-// print first address: tb1q6c8m3whsag5zadgl32nmhuf9q0qmtklws25n6g
+// print first address: NLhNpkHibiJs3Sj9BgoUwAFJvVsuGSJp62
 Serial.println(xpub.derive("m/0/0").address());
 
 PSBT tx;
@@ -89,5 +78,3 @@ tx.sign(hd);
 // print signed transaction
 Serial.println(tx.toBase64());
 ```
-
-Ready for more? Check out the [tutorial](https://micro-bitcoin.github.io/#/tutorial/README) and start writing your very own hardware wallet!

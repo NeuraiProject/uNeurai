@@ -33,7 +33,7 @@ void setup() {
     }
     Serial.print(" -> ");
     Serial.print(psbt.tx.txOuts[i].xnaAmount()*1e3);
-    Serial.println(" mBTC");
+    Serial.println(" mXNA");
   }
   Serial.print("Fee: ");
   Serial.print(float(psbt.fee())/100); // Arduino can't print 64-bit ints

@@ -24,12 +24,6 @@ void printAddresses(String pub){
     Serial.println(path);
     Serial.print("Address: ");
     Serial.println(hd.derive(path).address());
-    // Serial.print("Legacy: ");
-    // Serial.println(hd.derive(path).legacyAddress());
-    // Serial.print("Nested segwit: ");
-    // Serial.println(hd.derive(path).nestedSegwitAddress());
-    // Serial.print("Native segwit: ");
-    // Serial.println(hd.derive(path).segwitAddress());
   }
   
   Serial.println("\n");

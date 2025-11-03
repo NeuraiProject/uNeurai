@@ -70,7 +70,7 @@ int main() {
                 cout << " (change) ";
             }
         }
-        cout << " -> " << psbt.tx.txOuts[i].xnaAmount()*1e3 << " mBTC" << endl;
+        cout << " -> " << psbt.tx.txOuts[i].xnaAmount()*1e3 << " mXNA" << endl;
     }
     cout << "Fee: " << psbt.fee() << " sat" << endl;
 

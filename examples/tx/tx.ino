@@ -18,11 +18,11 @@ void setup() {
   String change = privateKey.address();
 
   // amounts to send
-  // unsigned long can store up to 4294967295 satoshi (42.9 BTC)
+  // unsigned long can store up to 4294967295 satoshi (42.9 XNA)
   // for larger amounts use uint64_t
-  unsigned long availableAmount = 2000000; // 58 mBTC
+  unsigned long availableAmount = 2000000; // 58 mXNA
   unsigned long fee = 1500;
-  unsigned long sendAmount = 1000000; // 20 mBTC
+  unsigned long sendAmount = 1000000; // 20 mXNA
   unsigned long changeAmount = availableAmount - sendAmount - fee;
 
   TxOut txOutDestination(sendAmount, destination);
@@ -67,7 +67,7 @@ void setup() {
     Serial.print(tx.txOuts[i].address());
     Serial.print(": ");
     Serial.print(((float)tx.txOuts[i].amount)/100000);
-    Serial.println(" mBTC");
+    Serial.println(" mXNA");
   }
 
   Serial.println("Unsigned transaction:");

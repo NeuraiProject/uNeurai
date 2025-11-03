@@ -8,7 +8,6 @@
 #include "utility/trezor/rfc6979.h"
 #include "utility/trezor/ecdsa.h"
 #include "utility/trezor/secp256k1.h"
-#include "utility/segwit_addr.h"
 #include "utility/trezor/bip39.h"
 #include "utility/trezor/memzero.h"
 
@@ -331,47 +330,6 @@ String PublicKey::legacyAddress(const Network * network) const{
     return String(addr);
 }
 #endif
-int PublicKey::segwitAddress(char address[], size_t len, const Network * network) const{
-    memzero(address, len);
-    if(len < 76){ // TODO: 76 is too much for native segwit
-        return 0;
-    }
-    uint8_t hash[20];
-    uint8_t sec_arr[65] = { 0 };
-    int l = sec(sec_arr, sizeof(sec_arr));
-    hash160(sec_arr, l, hash);
-    segwit_addr_encode(address, network->bech32, 0, hash, 20);
-    return 76;
-}
-#if USE_ARDUINO_STRING || USE_STD_STRING
-String PublicKey::segwitAddress(const Network * network) const{
-    char addr[76] = { 0 };
-    segwitAddress(addr, sizeof(addr), network);
-    return String(addr);
-}
-#endif
-int PublicKey::nestedSegwitAddress(char address[], size_t len, const Network * network) const{
-    memzero(address, len);
-    uint8_t script[22] = { 0 };
-    // script[0] = 0x00; // no need to set - already zero
-    script[1] = 0x14;
-    uint8_t sec_arr[65] = { 0 };
-    int l = sec(sec_arr, sizeof(sec_arr));
-    hash160(sec_arr, l, script+2);
-
-    uint8_t addr[21];
-    addr[0] = network->p2sh;
-    hash160(script, 22, addr+1);
-
-    return toBase58Check(addr, 21, address, len);
-}
-#if USE_ARDUINO_STRING || USE_STD_STRING
-String PublicKey::nestedSegwitAddress(const Network * network) const{
-    char addr[40] = { 0 };
-    nestedSegwitAddress(addr, sizeof(addr), network);
-    return String(addr);
-}
-#endif
 Script PublicKey::script(ScriptType type) const{
     return Script(*this, type);
 }
@@ -510,24 +468,12 @@ int PrivateKey::address(char * address, size_t len) const{
 int PrivateKey::legacyAddress(char * address, size_t len) const{
     return pubKey.legacyAddress(address, len, network);
 }
-int PrivateKey::segwitAddress(char * address, size_t len) const{
-    return pubKey.segwitAddress(address, len, network);
-}
-int PrivateKey::nestedSegwitAddress(char * address, size_t len) const{
-    return pubKey.nestedSegwitAddress(address, len, network);
-}
 #if USE_ARDUINO_STRING || USE_STD_STRING
 String PrivateKey::address() const{
     return pubKey.address(network);
 }
 String PrivateKey::legacyAddress() const{
     return pubKey.legacyAddress(network);
-}
-String PrivateKey::segwitAddress() const{
-    return pubKey.segwitAddress(network);
-}
-String PrivateKey::nestedSegwitAddress() const{
-    return pubKey.nestedSegwitAddress(network);
 }
 #endif
 

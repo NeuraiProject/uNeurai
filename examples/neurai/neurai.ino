@@ -31,15 +31,15 @@ void setup() {
   Serial.println("Master public key:");
   
   Serial.println("m/44'/0'/0'/0/0");
-  Serial.println(neurai.derive("m/0/0/").legacyAddress());
+  Serial.println(neurai.derive("m/0/0/").addreses());
   Serial.println("m/44'/0'/0'/0/1");
-  Serial.println(neurai.derive("m/0/1/").legacyAddress());
+  Serial.println(neurai.derive("m/0/1/").addreses());
   Serial.println("m/44'/0'/0'/0/2");
-  Serial.println(neurai.derive("m/0/2/").legacyAddress());
+  Serial.println(neurai.derive("m/0/2/").addreses());
   Serial.println("m/44'/0'/0'/0/3");
-  Serial.println(neurai.derive("m/0/3/").legacyAddress());
+  Serial.println(neurai.derive("m/0/3/").addreses());
   Serial.println("m/44'/0'/0'/0/4");
-  Serial.println(neurai.derive("m/0/4/").legacyAddress());
+  Serial.println(neurai.derive("m/0/4/").addreses());
 
 
 // BIP32 Root Key xprv9s21ZrQH143K3FjoUayaetzo2oWvPjn6t5HxNj7BKWdXitLf3jS6dpRLEuDea7SR8qQSdaTuoX5VMX1hKeuw3BdKrrCXHG7qw9f1ynQAymQ

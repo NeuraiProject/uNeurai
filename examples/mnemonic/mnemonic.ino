@@ -7,8 +7,9 @@
 #include "Neurai.h"
 
 void printHD(String mnemonic, String password = ""){
+  const Network * targetNetwork = &Neurai;
 
-  HDPrivateKey hd(mnemonic, password);
+  HDPrivateKey hd(mnemonic, password, targetNetwork);
 
   if(!hd){ // check if it is valid
     Serial.println("Invalid xpub");
@@ -21,14 +22,14 @@ void printHD(String mnemonic, String password = ""){
   Serial.println("Root private key:");
   Serial.println(hd);
 
-  Serial.println("bip84 master private key:");
-  HDPrivateKey account = hd.derive("m/84'/0'/0'/");
+  Serial.println("bip44 master private key:");
+  HDPrivateKey account = hd.derive("m/44'/0'/0'/");
   Serial.println(account);
   
-  Serial.println("bip84 master public key:");
+  Serial.println("bip44 master public key:");
   Serial.println(account.xpub());
   
-  Serial.println("first address:");
+  Serial.println("first receiving address (m/0/0):");
   Serial.println(account.derive("m/0/0/").address());
   
   Serial.println("\n");
@@ -36,7 +37,7 @@ void printHD(String mnemonic, String password = ""){
 
 void setup() {
   Serial.begin(115200);
-  printHD("arch volcano urge cradle turn labor skin secret squeeze denial jacket vintage fix glad lemon", "my secret password");
+  printHD("arch volcano urge cradle turn labor skin secret squeeze denial jacket vintage fix glad lemon", "123456");
 
   // entropy bytes to mnemonic
   uint8_t arr[] = {'1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'};

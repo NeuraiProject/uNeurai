@@ -116,27 +116,15 @@ public:
      */
     int legacyAddress(char * addr, size_t len, const Network * network = &DEFAULT_NETWORK) const;
     /**
-     *  \brief Fills `addr` with native segwit address (P2WPKH, usando el prefijo Bech32 de la red activa cuando esté disponible)
-     */
-    int segwitAddress(char * addr, size_t len, const Network * network = &DEFAULT_NETWORK) const;
-    /**
-     *  \brief Fills `addr` with nested segwit address (P2SH-P2WPKH, usando el prefijo p2sh de la red activa)
-     */
-    int nestedSegwitAddress(char * addr, size_t len, const Network * network = &DEFAULT_NETWORK) const;
-    /**
      *  \brief Alias for `legacyAddress`
      */
     int address(char * address, size_t len, const Network * network = &DEFAULT_NETWORK) const{ return legacyAddress(address, len, network); };
 #if USE_ARDUINO_STRING
     String legacyAddress(const Network * network = &DEFAULT_NETWORK) const;
-    String segwitAddress(const Network * network = &DEFAULT_NETWORK) const;
-    String nestedSegwitAddress(const Network * network = &DEFAULT_NETWORK) const;
     String address(const Network * network = &DEFAULT_NETWORK) const{ return legacyAddress(network); };
 #endif
 #if USE_STD_STRING
     std::string legacyAddress(const Network * network = &DEFAULT_NETWORK) const;
-    std::string segwitAddress(const Network * network = &DEFAULT_NETWORK) const;
-    std::string nestedSegwitAddress(const Network * network = &DEFAULT_NETWORK) const;
     std::string address(const Network * network = &DEFAULT_NETWORK) const{ return legacyAddress(network); };
 #endif
     /**
@@ -200,21 +188,13 @@ public:
     int address(char * address, size_t len) const;
     /** \brief Alias for .publicKey().legacyAddress(network) */
     int legacyAddress(char * address, size_t len) const;
-    /** \brief Alias for .publicKey().segwitAddress(network) */
-    int segwitAddress(char * address, size_t len) const;
-    /** \brief Alias for .publicKey().nestedSegwitAddress(network) */
-    int nestedSegwitAddress(char * address, size_t len) const;
 #if USE_ARDUINO_STRING
     String address() const;
     String legacyAddress() const;
-    String segwitAddress() const;
-    String nestedSegwitAddress() const;
 #endif
 #if USE_STD_STRING
     std::string address() const;
     std::string legacyAddress() const;
-    std::string segwitAddress() const;
-    std::string nestedSegwitAddress() const;
 #endif
 //    PrivateKey &operator=(const PrivateKey &other);                   // assignment
     /** \brief Performs ECDH key agreement using public key of another party.

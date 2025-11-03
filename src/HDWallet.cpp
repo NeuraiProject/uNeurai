@@ -5,7 +5,6 @@
 #include "Hash.h"
 #include "Conversion.h"
 #include "utility/trezor/sha2.h"
-#include "utility/segwit_addr.h"
 #include "utility/trezor/bignum.h"
 #include "utility/trezor/ecdsa.h"
 #include "utility/trezor/secp256k1.h"
@@ -243,7 +242,7 @@ int HDPrivateKey::fromSeed(const uint8_t * seed, size_t seedSize, const Network 
     init();
     uint8_t raw[64] = { 0 };
     SHA512 sha;
-    char key[] = "Neurai seed";
+    static const char key[] = "Bitcoin seed";
     sha.beginHMAC((uint8_t *)key, strlen(key));
     sha.write(seed, seedSize);
     sha.endHMAC(raw);
@@ -299,16 +298,7 @@ int HDPrivateKey::xprv(char * arr, size_t len) const{
     return toBase58Check(hex, sizeof(hex), arr, len);
 }
 int HDPrivateKey::address(char * addr, size_t len) const{
-    switch(type){
-        case P2WPKH:
-            return segwitAddress(addr, len);
-        case P2SH_P2WPKH:
-            return nestedSegwitAddress(addr, len);
-        case P2PKH:
-            return legacyAddress(addr, len);
-        default:
-            return segwitAddress(addr, len);
-    }
+    return legacyAddress(addr, len);
 }
 #if USE_ARDUINO_STRING || USE_STD_STRING
 String HDPrivateKey::xprv() const{
@@ -317,16 +307,7 @@ String HDPrivateKey::xprv() const{
     return String(arr);
 }
 String HDPrivateKey::address() const{
-    switch(type){
-        case P2WPKH:
-            return segwitAddress();
-        case P2SH_P2WPKH:
-            return nestedSegwitAddress();
-        case P2PKH:
-            return legacyAddress();
-        default:
-            return segwitAddress();
-    }
+    return legacyAddress();
 }
 #endif
 int HDPrivateKey::xpub(char * arr, size_t len) const{
@@ -727,16 +708,7 @@ int HDPublicKey::xpub(char * arr, size_t len) const{
     return toBase58Check(hex, sizeof(hex), arr, len);
 }
 int HDPublicKey::address(char * addr, size_t len) const{
-    switch(type){
-        case P2WPKH:
-            return PublicKey::segwitAddress(addr, len, network);
-        case P2SH_P2WPKH:
-            return PublicKey::nestedSegwitAddress(addr, len, network);
-        case P2PKH:
-            return PublicKey::legacyAddress(addr, len, network);
-        default:
-            return PublicKey::segwitAddress(addr, len, network);
-    }
+    return PublicKey::legacyAddress(addr, len, network);
 }
 #if USE_ARDUINO_STRING || USE_STD_STRING
 String HDPublicKey::xpub() const{
@@ -745,16 +717,7 @@ String HDPublicKey::xpub() const{
     return String(arr);
 }
 String HDPublicKey::address() const{
-    switch(type){
-        case P2WPKH:
-            return PublicKey::segwitAddress(network);
-        case P2SH_P2WPKH:
-            return PublicKey::nestedSegwitAddress(network);
-        case P2PKH:
-            return PublicKey::legacyAddress(network);
-        default:
-            return PublicKey::segwitAddress(network);
-    }
+    return PublicKey::legacyAddress(network);
 }
 #endif
 

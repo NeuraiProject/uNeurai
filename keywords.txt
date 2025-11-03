@@ -66,8 +66,6 @@ child	KEYWORD2
 hardenedChild	KEYWORD2
 derive	KEYWORD2
 legacyAddress	KEYWORD2
-segwitAddress	KEYWORD2
-nestedSegwitAddress	KEYWORD2
 parse	KEYWORD2
 fromWIF	KEYWORD2
 publicKey	KEYWORD2
