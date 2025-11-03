@@ -1,7 +1,6 @@
 # Micro-Neurai
 
 C++ Neurai library for 32-bit microcontrollers. The library supports [Arduino IDE](https://www.arduino.cc/), [ARM mbed](https://www.mbed.com/en/) and bare metal.<br>
-This project builds on the uBitcoin codebase, adapting it for Neurai hardware and tooling.
 It provides a collection of convenient classes for Neurai: private and public keys, HD wallets, generation of the recovery phrases, PSBT transaction formats, scripts — everything required for a hardware wallet or other neurai-powered device.
 
 The library should work on any decent 32-bit microcontroller, like esp32, riscV, stm32 series and others. It *doesn't work* on 8-bit microcontrollers like a classic Arduino as these microcontrollers are not powerful enough to run complicated crypto algorithms.
@@ -51,7 +50,7 @@ Now we can write a simple example that does the following:
 ```cpp
 // derive master private key
 HDPrivateKey hd("add good charge eagle walk culture book inherit fan nature seek repair", "");
-// derive native segwit account (bip-84) for tesnet
+// derive native Neurai account
 HDPrivateKey account = hd.derive("m/44'/0'/0'/");
 // print xpub: xpub6DBgMq857cJ4ByRimVBYqUkVqSw6MBoSrm...HDp2vfhrvRpT52HRNfFm1QE6v3Gtxu
 Serial.println(account.xpub());
@@ -78,3 +77,7 @@ tx.sign(hd);
 // print signed transaction
 Serial.println(tx.toBase64());
 ```
+
+## Thanks
+
+This project builds on the uBitcoin codebase, adapting it for Neurai hardware and tooling, and we gratefully acknowledge Stepan Snigirev for open-sourcing that work.
