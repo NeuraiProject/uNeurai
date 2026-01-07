@@ -42,7 +42,7 @@ typedef struct {
 } Network;
 
 extern const Network Neurai;
-extern const Network NeuraiHW;
+extern const Network NeuraiLegacy;
 extern const Network NeuraiTest;
 extern const Network * networks[];
 extern const uint8_t networks_len;

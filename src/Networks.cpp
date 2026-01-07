@@ -16,10 +16,10 @@ const Network Neurai = {
     { 0x04, 0xb2, 0x47, 0x46 }, // zpub
     { 0x02, 0x95, 0xb4, 0x3f }, // Ypub
     { 0x02, 0xaa, 0x7e, 0xd3 }, // Zpub
-    0 // bip32 coin type
+    1900 // bip32 coin type
 };
 
-const Network NeuraiHW = {
+const Network NeuraiLegacy = {
     0x35, // p2pkh
     0x75, // p2sh
     "",  // no bech32 prefix in Neurai
@@ -34,7 +34,7 @@ const Network NeuraiHW = {
     { 0x04, 0xb2, 0x47, 0x46 }, // zpub
     { 0x02, 0x95, 0xb4, 0x3f }, // Ypub
     { 0x02, 0xaa, 0x7e, 0xd3 }, // Zpub
-    1900 // bip32 coin type for hardware targets
+    0 // bip32 coin type for legacy targets
 };
 
 const Network NeuraiTest = {
@@ -55,5 +55,5 @@ const Network NeuraiTest = {
     0 // bip32 coin type
 };
 
-const Network * networks[3] = { &Neurai, &NeuraiHW, &NeuraiTest };
+const Network * networks[3] = { &Neurai, &NeuraiLegacy, &NeuraiTest };
 const uint8_t networks_len = 3;

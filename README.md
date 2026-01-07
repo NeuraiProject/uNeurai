@@ -12,6 +12,14 @@ We use elliptic curve implementation from [trezor-crypto](https://github.com/tre
 In progress...
 
 Telegram group: https://t.me/neuraiproject
+ 
+ ## Networks
+ 
+ Micro-Neurai supports the following network configurations:
+ 
+ - **Neurai**: (Default) The mainnet network. Uses BIP-44 coin type `1900`.
+ - **NeuraiLegacy**: Mainnet network using BIP-44 coin type `0`. Compatible with legacy wallet implementations.
+ - **NeuraiTest**: The testnet network.
 
 ## Installation
 
@@ -50,8 +58,8 @@ Now we can write a simple example that does the following:
 ```cpp
 // derive master private key
 HDPrivateKey hd("add good charge eagle walk culture book inherit fan nature seek repair", "");
-// derive native Neurai account
-HDPrivateKey account = hd.derive("m/44'/0'/0'/");
+// derive native Neurai account (BIP-44 coin type 1900)
+HDPrivateKey account = hd.derive("m/44'/1900'/0'/");
 // print xpub: xpub6DBgMq857cJ4ByRimVBYqUkVqSw6MBoSrm...HDp2vfhrvRpT52HRNfFm1QE6v3Gtxu
 Serial.println(account.xpub());
 // or change the account type to UNKNOWN_TYPE to get tpub

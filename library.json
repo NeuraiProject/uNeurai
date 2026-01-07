@@ -1,15 +1,13 @@
 {
   "name": "uNeurai",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Brings Neurai to embedded devices. Write your own hardware wallet, vending machine or any other neurai-powered device. Supports public and private keys, HD wallets, transactions and scripts. Everything required to start working with Neurai on microcontrollers.",
   "keywords": "neurai, cryptography, xna",
-  "repository":
-  {
+  "repository": {
     "type": "git",
     "url": "https://github.com/NeuraiProject/uNeurai.git"
   },
-  "authors":
-  [
+  "authors": [
     {
       "name": "Asimov",
       "email": "web@neurai.org",
@@ -18,8 +16,7 @@
   ],
   "license": "MIT",
   "homepage": "https://neurai.org",
-  "dependencies": {
-  },
+  "dependencies": {},
   "frameworks": "*",
   "platforms": "*"
 }
