@@ -39,12 +39,17 @@ typedef struct {
     uint8_t Zpub[4]; 
     /** \brief bip32 coin index */
     uint32_t bip32;
-} Network;
+} ChainNetwork;
 
-extern const Network Neurai;
-extern const Network NeuraiLegacy;
-extern const Network NeuraiTest;
-extern const Network * networks[];
+extern const ChainNetwork Neurai;
+extern const ChainNetwork NeuraiLegacy;
+extern const ChainNetwork NeuraiTest;
+extern const ChainNetwork * networks[];
 extern const uint8_t networks_len;
+
+// default network for the application
+#ifndef DEFAULT_NETWORK
+#define DEFAULT_NETWORK Neurai
+#endif
 
 #endif // __UXNA_NETWORKS_H__

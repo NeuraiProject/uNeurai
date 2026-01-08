@@ -1,7 +1,7 @@
 // all known networks
 #include "Networks.h"
 
-const Network Neurai = {
+const ChainNetwork Neurai = {
     0x35, // p2pkh
     0x75, // p2sh
     "",  // no bech32 prefix in Neurai
@@ -19,7 +19,7 @@ const Network Neurai = {
     1900 // bip32 coin type
 };
 
-const Network NeuraiLegacy = {
+const ChainNetwork NeuraiLegacy = {
     0x35, // p2pkh
     0x75, // p2sh
     "",  // no bech32 prefix in Neurai
@@ -37,7 +37,7 @@ const Network NeuraiLegacy = {
     0 // bip32 coin type for legacy targets
 };
 
-const Network NeuraiTest = {
+const ChainNetwork NeuraiTest = {
     0x7f, // p2pkh
     0xc4, // p2sh
     "",  // no bech32 prefix in Neurai
@@ -55,5 +55,5 @@ const Network NeuraiTest = {
     0 // bip32 coin type
 };
 
-const Network * networks[3] = { &Neurai, &NeuraiLegacy, &NeuraiTest };
+const ChainNetwork * networks[3] = { &Neurai, &NeuraiLegacy, &NeuraiTest };
 const uint8_t networks_len = 3;

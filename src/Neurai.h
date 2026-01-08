@@ -114,18 +114,18 @@ public:
     /**
      *  \brief Fills `addr` with legacy Pay-To-Pubkey-Hash address (P2PKH, usando el prefijo p2pkh de la red activa)
      */
-    int legacyAddress(char * addr, size_t len, const Network * network = &DEFAULT_NETWORK) const;
+    int legacyAddress(char * addr, size_t len, const ChainNetwork * network = &DEFAULT_NETWORK) const;
     /**
      *  \brief Alias for `legacyAddress`
      */
-    int address(char * address, size_t len, const Network * network = &DEFAULT_NETWORK) const{ return legacyAddress(address, len, network); };
+    int address(char * address, size_t len, const ChainNetwork * network = &DEFAULT_NETWORK) const{ return legacyAddress(address, len, network); };
 #if USE_ARDUINO_STRING
-    String legacyAddress(const Network * network = &DEFAULT_NETWORK) const;
-    String address(const Network * network = &DEFAULT_NETWORK) const{ return legacyAddress(network); };
+    String legacyAddress(const ChainNetwork * network = &DEFAULT_NETWORK) const;
+    String address(const ChainNetwork * network = &DEFAULT_NETWORK) const{ return legacyAddress(network); };
 #endif
 #if USE_STD_STRING
-    std::string legacyAddress(const Network * network = &DEFAULT_NETWORK) const;
-    std::string address(const Network * network = &DEFAULT_NETWORK) const{ return legacyAddress(network); };
+    std::string legacyAddress(const ChainNetwork * network = &DEFAULT_NETWORK) const;
+    std::string address(const ChainNetwork * network = &DEFAULT_NETWORK) const{ return legacyAddress(network); };
 #endif
     /**
      *  \brief verifies the ECDSA signature of the hash of the message
@@ -151,7 +151,7 @@ protected:
     virtual size_t from_stream(ParseStream *s);
 public:
     PrivateKey();
-    PrivateKey(const uint8_t secret_arr[32], bool use_compressed = true, const Network * net = &DEFAULT_NETWORK);
+    PrivateKey(const uint8_t secret_arr[32], bool use_compressed = true, const ChainNetwork * net = &DEFAULT_NETWORK);
 #if USE_ARDUINO_STRING
     PrivateKey(const String wifString);
 #elif USE_STD_STRING
@@ -166,7 +166,7 @@ public:
     void setSecret(const uint8_t secret_arr[32]){ memcpy(num, secret_arr, 32); pubKey = *this * GeneratorPoint; };
 
     /** \brief Pointer to the network to use (Neurai o NeuraiTest) */
-    const Network * network;
+    const ChainNetwork * network;
 
     /** \brief Writes the private key in Wallet Import Format */
     int wif(char * wifArr, size_t len) const;
@@ -228,15 +228,15 @@ public:
                  uint8_t key_depth = 0,
                  const uint8_t parent_fingerprint_arr[4] = NULL,
                  uint32_t childnumber = 0,
-                 const Network * network = &DEFAULT_NETWORK,
+                 const ChainNetwork * network = &DEFAULT_NETWORK,
                  ScriptType key_type = UNKNOWN_TYPE);
     HDPrivateKey(const char xprvArr[]);
-    HDPrivateKey(const char * mnemonic, size_t mnemonicSize, const char * password, size_t passwordSize, const Network * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
+    HDPrivateKey(const char * mnemonic, size_t mnemonicSize, const char * password, size_t passwordSize, const ChainNetwork * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
 #if USE_STD_STRING
-    HDPrivateKey(std::string mnemonic, std::string password, const Network * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
+    HDPrivateKey(std::string mnemonic, std::string password, const ChainNetwork * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
 #endif
 #if USE_ARDUINO_STRING
-    HDPrivateKey(String mnemonic, String password, const Network * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
+    HDPrivateKey(String mnemonic, String password, const ChainNetwork * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
 #endif
 /*    HDPrivateKey(const HDPrivateKey &other):HDPrivateKey(  // copy
         other.num, other.chainCode, other.depth,
@@ -253,17 +253,17 @@ public:
     uint32_t childNumber;
     ScriptType type;
 
-    int fromSeed(const uint8_t * seed, size_t seedSize, const Network * network = &DEFAULT_NETWORK);
-    // int fromSeed(const uint8_t seed[64], const Network * network = &DEFAULT_NETWORK);
-    int fromMnemonic(const char * mnemonic, size_t mnemonicSize, const char * password, size_t passwordSize, const Network * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
-    int fromMnemonic(const char * mnemonic, const char * password, const Network * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL){
+    int fromSeed(const uint8_t * seed, size_t seedSize, const ChainNetwork * network = &DEFAULT_NETWORK);
+    // int fromSeed(const uint8_t seed[64], const ChainNetwork * network = &DEFAULT_NETWORK);
+    int fromMnemonic(const char * mnemonic, size_t mnemonicSize, const char * password, size_t passwordSize, const ChainNetwork * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
+    int fromMnemonic(const char * mnemonic, const char * password, const ChainNetwork * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL){
         return fromMnemonic(mnemonic, strlen(mnemonic), password, strlen(password), network, progress_callback);
     }
 #if USE_STD_STRING
-    int fromMnemonic(std::string mnemonic, std::string password, const Network * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
+    int fromMnemonic(std::string mnemonic, std::string password, const ChainNetwork * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
 #endif
 #if USE_ARDUINO_STRING
-    int fromMnemonic(String mnemonic, String password, const Network * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
+    int fromMnemonic(String mnemonic, String password, const ChainNetwork * network = &DEFAULT_NETWORK, void (*progress_callback)(float) = NULL);
 #endif
     int xprv(char * arr, size_t len) const;
     int xpub(char * arr, size_t len) const;
@@ -322,7 +322,7 @@ public:
                  uint8_t key_depth = 0,
                  const uint8_t parent_fingerprint_arr[4] = NULL,
                  uint32_t childnumber = 0,
-                 const Network * net = &DEFAULT_NETWORK,
+                 const ChainNetwork * net = &DEFAULT_NETWORK,
                  ScriptType key_type = UNKNOWN_TYPE);
     HDPublicKey(const char * xpubArr);
 /*    HDPublicKey(const HDPublicKey &other):HDPublicKey(  // copy
@@ -343,7 +343,7 @@ public:
     uint8_t parentFingerprint[4];
     uint32_t childNumber;
     ScriptType type;
-    const Network * network;
+    const ChainNetwork * network;
 
     int xpub(char * arr, size_t len) const;
     int address(char * arr, size_t len) const;
@@ -454,12 +454,12 @@ public:
     /** \brief tries to determine the script type */
     ScriptType type() const;
     /** \brief returns address corresponding to the script */
-    size_t address(char * buffer, size_t len, const Network * network = &DEFAULT_NETWORK) const;
+    size_t address(char * buffer, size_t len, const ChainNetwork * network = &DEFAULT_NETWORK) const;
 #if USE_ARDUINO_STRING
-    String address(const Network * network = &DEFAULT_NETWORK) const;
+    String address(const ChainNetwork * network = &DEFAULT_NETWORK) const;
 #endif
 #if USE_STD_STRING
-    std::string address(const Network * network = &DEFAULT_NETWORK) const;
+    std::string address(const ChainNetwork * network = &DEFAULT_NETWORK) const;
 #endif
 
     /** \brief length of the script with varint */
@@ -591,12 +591,12 @@ public:
     /** \brief returns the output amount in BTC */
     float xnaAmount(){ return (float)amount/1e8; };
     /** \brief returns the address corresponding to the output script */
-    size_t address(char * addr, size_t len, const Network * network = &DEFAULT_NETWORK) const{ return scriptPubkey.address(addr, len, network); };
+    size_t address(char * addr, size_t len, const ChainNetwork * network = &DEFAULT_NETWORK) const{ return scriptPubkey.address(addr, len, network); };
 #if USE_ARDUINO_STRING
-    String address(const Network * network = &DEFAULT_NETWORK) const{ return scriptPubkey.address(network); };
+    String address(const ChainNetwork * network = &DEFAULT_NETWORK) const{ return scriptPubkey.address(network); };
 #endif
 #if USE_STD_STRING
-    std::string address(const Network * network = &DEFAULT_NETWORK) const{ return scriptPubkey.address(network); };
+    std::string address(const ChainNetwork * network = &DEFAULT_NETWORK) const{ return scriptPubkey.address(network); };
 #endif
 
     bool isValid() const{ return status==PARSING_DONE; };

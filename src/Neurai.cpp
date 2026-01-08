@@ -309,7 +309,7 @@ void Signature::fromBin(const uint8_t * arr, size_t len){
 }
 // ---------------------------------------------------------------- PublicKey class
 
-int PublicKey::legacyAddress(char * address, size_t len, const Network * network) const{
+int PublicKey::legacyAddress(char * address, size_t len, const ChainNetwork * network) const{
     memzero(address, len);
 
     uint8_t buffer[20];
@@ -324,7 +324,7 @@ int PublicKey::legacyAddress(char * address, size_t len, const Network * network
     return toBase58Check(addr, 21, address, len);
 }
 #if USE_ARDUINO_STRING || USE_STD_STRING
-String PublicKey::legacyAddress(const Network * network) const{
+String PublicKey::legacyAddress(const ChainNetwork * network) const{
     char addr[40] = { 0 };
     legacyAddress(addr, sizeof(addr), network);
     return String(addr);
@@ -376,7 +376,7 @@ PrivateKey::PrivateKey(void){
     memzero(num, 32); // empty key
     network = &DEFAULT_NETWORK;
 }
-PrivateKey::PrivateKey(const uint8_t * secret_arr, bool use_compressed, const Network * net){
+PrivateKey::PrivateKey(const uint8_t * secret_arr, bool use_compressed, const ChainNetwork * net){
     reset();
     memcpy(num, secret_arr, 32);
     network = net;

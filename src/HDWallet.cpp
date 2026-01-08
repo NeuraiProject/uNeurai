@@ -37,7 +37,7 @@ HDPrivateKey::HDPrivateKey(const uint8_t secret[32],
                            uint8_t key_depth,
                            const uint8_t parent_fingerprint_arr[4],
                            uint32_t child_number,
-                           const Network * net,
+                           const ChainNetwork * net,
                            ScriptType key_type){
     init();
     memcpy(num, secret, 32);
@@ -72,12 +72,12 @@ HDPrivateKey::HDPrivateKey(const char * xprvArr){
     init();
     from_str(xprvArr, strlen(xprvArr));
 }
-HDPrivateKey::HDPrivateKey(const char * mnemonic, size_t mnemonicSize, const char * password, size_t passwordSize, const Network * net, void (*progress_callback)(float)){
+HDPrivateKey::HDPrivateKey(const char * mnemonic, size_t mnemonicSize, const char * password, size_t passwordSize, const ChainNetwork * net, void (*progress_callback)(float)){
     init();
     fromMnemonic(mnemonic, mnemonicSize, password, passwordSize, net, progress_callback);
 }
 #if USE_ARDUINO_STRING || USE_STD_STRING
-HDPrivateKey::HDPrivateKey(String mnemonic, String password, const Network * net, void (*progress_callback)(float)){
+HDPrivateKey::HDPrivateKey(String mnemonic, String password, const ChainNetwork * net, void (*progress_callback)(float)){
     init();
     fromMnemonic(mnemonic, password, net, progress_callback);
 }
@@ -238,7 +238,7 @@ size_t HDPrivateKey::from_str(const char * xprvArr, size_t xprvLen){
     HDPrivateKey::from_stream(&s);
     return xprvLen;
 }
-int HDPrivateKey::fromSeed(const uint8_t * seed, size_t seedSize, const Network * net){
+int HDPrivateKey::fromSeed(const uint8_t * seed, size_t seedSize, const ChainNetwork * net){
     init();
     uint8_t raw[64] = { 0 };
     SHA512 sha;
@@ -257,7 +257,7 @@ int HDPrivateKey::fromSeed(const uint8_t * seed, size_t seedSize, const Network 
 // int HDPrivateKey::fromSeed(const uint8_t seed[64], const Network * net){
 //     fromSeed(seed, 64);
 // }
-int HDPrivateKey::fromMnemonic(const char * mnemonic, size_t mnemonicSize, const char * password, size_t passwordSize, const Network * net, void (*progress_callback)(float)){
+int HDPrivateKey::fromMnemonic(const char * mnemonic, size_t mnemonicSize, const char * password, size_t passwordSize, const ChainNetwork * net, void (*progress_callback)(float)){
     init();
     uint8_t seed[64] = { 0 };
     uint8_t ind[4] = { 0, 0, 0, 1 };
@@ -288,7 +288,7 @@ int HDPrivateKey::fromMnemonic(const char * mnemonic, size_t mnemonicSize, const
     return 1;
 }
 #if USE_ARDUINO_STRING || USE_STD_STRING
-int HDPrivateKey::fromMnemonic(String mnemonic, String password, const Network * net, void (*progress_callback)(float)){
+int HDPrivateKey::fromMnemonic(String mnemonic, String password, const ChainNetwork * net, void (*progress_callback)(float)){
     return fromMnemonic(mnemonic.c_str(), mnemonic.length(), password.c_str(), password.length(), net, progress_callback);
 }
 #endif
@@ -662,7 +662,7 @@ HDPublicKey::HDPublicKey(const uint8_t p[64],
                            uint8_t key_depth,
                            const uint8_t parent_fingerprint_arr[4],
                            uint32_t child_number,
-                           const Network * net,
+                           const ChainNetwork * net,
                            ScriptType key_type){
     reset();
     memcpy(point, p, 64);
