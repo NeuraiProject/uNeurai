@@ -485,6 +485,13 @@ size_t Tx::from_stream(ParseStream *s){
     return bytes_read;
 }
 int Tx::sigHash(uint8_t h[32], uint8_t inputIndex, const Script scriptPubkey, SigHashType sighash) const{
+    const uint8_t baseType = ((uint8_t)sighash) & 0x1f;
+    memset(h, 0, 32);
+    if(baseType == SIGHASH_SINGLE && inputIndex >= outputsNumber){
+        h[0] = 1;
+        return 32;
+    }
+
     Script empty;
     DoubleSha s;
     s.begin();
@@ -493,22 +500,49 @@ int Tx::sigHash(uint8_t h[32], uint8_t inputIndex, const Script scriptPubkey, Si
 
     intToLittleEndian(version, arr, 4);
     s.write(arr, 4);
-    size_t l = writeVarInt(inputsNumber, arr, 10);
+
+    const bool anyoneCanPay = (((uint8_t)sighash) & SIGHASH_ANYONECANPAY) != 0;
+    size_t l = writeVarInt(anyoneCanPay ? 1 : inputsNumber, arr, 10);
     s.write(arr, l);
-    for(size_t i=0; i<inputsNumber; i++){
-        TxIn t = txIns[i];
-        if(i == inputIndex){
-            t.scriptSig = scriptPubkey;
-        }else{
-            t.scriptSig = empty;
-        }
+    if(anyoneCanPay){
+        TxIn t = txIns[inputIndex];
+        t.scriptSig = scriptPubkey;
         s.serialize(&t, 0);
+    }else{
+        for(size_t i=0; i<inputsNumber; i++){
+            TxIn t = txIns[i];
+            if(i == inputIndex){
+                t.scriptSig = scriptPubkey;
+            }else{
+                t.scriptSig = empty;
+                if(baseType == SIGHASH_SINGLE || baseType == SIGHASH_NONE){
+                    t.sequence = 0;
+                }
+            }
+            s.serialize(&t, 0);
+        }
     }
-    l = writeVarInt(outputsNumber, arr, 10);
+
+    const size_t outputsToSerialize = (baseType == SIGHASH_NONE) ? 0 : ((baseType == SIGHASH_SINGLE) ? (inputIndex + 1) : outputsNumber);
+    l = writeVarInt(outputsToSerialize, arr, 10);
     s.write(arr, l);
-    for(size_t i=0; i<outputsNumber; i++){
-        s.serialize(&txOuts[i], 0);
+    if(baseType == SIGHASH_SINGLE){
+        for(size_t i=0; i<outputsToSerialize; i++){
+            if(i == inputIndex){
+                s.serialize(&txOuts[i], 0);
+            }else{
+                TxOut nullOutput;
+                nullOutput.amount = (uint64_t)-1;
+                nullOutput.scriptPubkey = empty;
+                s.serialize(&nullOutput, 0);
+            }
+        }
+    }else{
+        for(size_t i=0; i<outputsToSerialize; i++){
+            s.serialize(&txOuts[i], 0);
+        }
     }
+
     intToLittleEndian(locktime, arr, 4);
     s.write(arr, 4);
     intToLittleEndian(sighash, arr, 4);
@@ -664,13 +698,24 @@ int Tx::sigHashSegwit(uint8_t h[32], uint8_t inputIndex, const Script scriptPubK
     DoubleSha s;
     s.begin();
     uint8_t arr[8];
+    const uint8_t baseType = ((uint8_t)sighash) & 0x1f;
+    const bool anyoneCanPay = (((uint8_t)sighash) & SIGHASH_ANYONECANPAY) != 0;
+
     intToLittleEndian(version, arr, 4);
     s.write(arr, 4);
 
-    hashPrevouts(h);
+    if(!anyoneCanPay){
+        hashPrevouts(h);
+    }else{
+        memset(h, 0, 32);
+    }
     s.write(h, 32);
 
-    hashSequence(h);
+    if(!anyoneCanPay && baseType != SIGHASH_SINGLE && baseType != SIGHASH_NONE){
+        hashSequence(h);
+    }else{
+        memset(h, 0, 32);
+    }
     s.write(h, 32);
 
     s.write(txIns[inputIndex].hash, 32);
@@ -683,7 +728,16 @@ int Tx::sigHashSegwit(uint8_t h[32], uint8_t inputIndex, const Script scriptPubK
     intToLittleEndian(txIns[inputIndex].sequence, arr, 4);
     s.write(arr, 4);
 
-    hashOutputs(h);
+    if(baseType != SIGHASH_SINGLE && baseType != SIGHASH_NONE){
+        hashOutputs(h);
+    }else if(baseType == SIGHASH_SINGLE && inputIndex < outputsNumber){
+        DoubleSha outputHasher;
+        outputHasher.begin();
+        outputHasher.serialize(&txOuts[inputIndex], 0);
+        outputHasher.end(h);
+    }else{
+        memset(h, 0, 32);
+    }
     s.write(h, 32);
 
     intToLittleEndian(locktime, arr, 4);

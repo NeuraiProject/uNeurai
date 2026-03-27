@@ -191,6 +191,8 @@ size_t PSBT::from_stream(ParseStream *s){
         for(size_t i=0; i<tx.inputsNumber; i++){
             txInsMeta[i].derivationsLen = 0;
             txInsMeta[i].signaturesLen = 0;
+            txInsMeta[i].hasSighashType = 0;
+            txInsMeta[i].sighashType = SIGHASH_ALL;
         }
         txOutsMeta = new PSBTOutputMetadata[tx.outputsNumber];
         for(size_t i=0; i<tx.outputsNumber; i++){
@@ -320,6 +322,7 @@ int PSBT::add(uint8_t section, const Script * k, const Script * v){
                     res = -2;
                     break;
                 }
+                psig.sighashType = val_arr[v->length()-1];
                 if(txInsMeta[input].signaturesLen == 0){
                     txInsMeta[input].signaturesLen = 1;
                     txInsMeta[input].signatures = new PSBTPartialSignature[txInsMeta[input].signaturesLen];
@@ -337,7 +340,18 @@ int PSBT::add(uint8_t section, const Script * k, const Script * v){
                 break;
             }
             case 3: { // PSBT_IN_SIGHASH_TYPE
-                // not implemented
+                if(k->length() != 2){
+                    res = -1;
+                    break;
+                }
+                size_t value_offset = lenVarInt(v->length());
+                if(v->length() - value_offset != 4){
+                    res = -2;
+                    break;
+                }
+                txInsMeta[input].sighashType = littleEndianToInt(val_arr + value_offset, 4);
+                txInsMeta[input].hasSighashType = 1;
+                res = 1;
                 break;
             }
             case 4: { // PSBT_IN_REDEEM_SCRIPT
@@ -486,6 +500,21 @@ size_t PSBT::to_stream(SerializeStream *s, size_t offset) const{
     while(s->available() && section < sections_number){
         if(section > 0 && section < tx.inputsNumber+1){
             uint8_t input = section-1;
+            if(txInsMeta[input].hasSighashType){
+                uint8_t key_arr[2] = {0x01, 0x03};
+                while(s->available() && bytes_written+offset-cur < 2){
+                    s->write(key_arr[bytes_written+offset-cur]);
+                    bytes_written++;
+                }
+                cur += 2;
+                uint8_t val_arr[5] = {0x04, 0, 0, 0, 0};
+                intToLittleEndian(txInsMeta[input].sighashType, val_arr + 1, 4);
+                while(s->available() && bytes_written+offset-cur < 5){
+                    s->write(val_arr[bytes_written+offset-cur]);
+                    bytes_written++;
+                }
+                cur += 5;
+            }
             for(size_t i=0; i<txInsMeta[input].signaturesLen; i++){
                 uint8_t key_arr[67];
                 key_arr[1] = 0x02; // PSBT_IN_PARTIAL_SIG
@@ -499,7 +528,7 @@ size_t PSBT::to_stream(SerializeStream *s, size_t offset) const{
                 uint8_t val_arr[100];
                 uint8_t val_len = 1+txInsMeta[input].signatures[i].signature.serialize(val_arr+1, 98);
                 val_arr[0] = val_len;
-                val_arr[val_len] = SIGHASH_ALL;
+                val_arr[val_len] = txInsMeta[input].signatures[i].sighashType;
                 while(s->available() && bytes_written+offset-cur < (size_t)val_len+1){
                     s->write(val_arr[bytes_written+offset-cur]);
                     bytes_written++;
@@ -519,6 +548,9 @@ size_t PSBT::length() const{
     uint8_t sections_number = 1 + tx.inputsNumber + tx.outputsNumber;
     size_t len = 7 + lenVarInt(tx.length()) + tx.length() + sections_number;
     for(size_t input=0; input<tx.inputsNumber; input++){
+        if(txInsMeta[input].hasSighashType){
+            len += 7;
+        }
         for(size_t i=0; i<txInsMeta[input].signaturesLen; i++){
             len += 2+txInsMeta[input].signatures[i].pubkey.length();
             len += 2+txInsMeta[input].signatures[i].signature.length();
@@ -633,23 +665,24 @@ uint8_t PSBT::sign(const HDPrivateKey root){
                     }
                     if(txInsMeta[i].derivations[j].pubkey == pk.publicKey()){
                         // can sign - let's sign
+                        SigHashType sighashType = txInsMeta[i].hasSighashType ? (SigHashType)txInsMeta[i].sighashType : SIGHASH_ALL;
                         uint8_t h[32];
                         if(txInsMeta[i].witnessScript.length() > 1){ // P2WSH / P2SH_P2WSH
-                            tx.sigHashSegwit(h, i, txInsMeta[i].witnessScript, txInsMeta[i].txOut.amount);
+                            tx.sigHashSegwit(h, i, txInsMeta[i].witnessScript, txInsMeta[i].txOut.amount, sighashType);
                         }else{
                             if(txInsMeta[i].redeemScript.length() > 1){
                                 if(txInsMeta[i].redeemScript.type() == P2WPKH){ // P2SH_P2WPKH
-                                    // tx.sigHashSegwit(h, i, txInsMeta[i].redeemScript, txInsMeta[i].txOut.amount);
-                                    tx.sigHashSegwit(h, i, pk.publicKey().script(), txInsMeta[i].txOut.amount);
+                                    // tx.sigHashSegwit(h, i, txInsMeta[i].redeemScript, txInsMeta[i].txOut.amount, sighashType);
+                                    tx.sigHashSegwit(h, i, pk.publicKey().script(), txInsMeta[i].txOut.amount, sighashType);
                                 }else{ // P2SH
-                                    tx.sigHash(h, i, txInsMeta[i].redeemScript);
+                                    tx.sigHash(h, i, txInsMeta[i].redeemScript, sighashType);
                                 }
                             }else{ // P2WPKH / P2PKH / DIRECT_SCRIPT
                                 if(txInsMeta[i].txOut.scriptPubkey.type() == P2WPKH){
-                                    // tx.sigHashSegwit(h, i, txInsMeta[i].txOut.scriptPubkey, txInsMeta[i].txOut.amount);
-                                    tx.sigHashSegwit(h, i, pk.publicKey().script(), txInsMeta[i].txOut.amount);
+                                    // tx.sigHashSegwit(h, i, txInsMeta[i].txOut.scriptPubkey, txInsMeta[i].txOut.amount, sighashType);
+                                    tx.sigHashSegwit(h, i, pk.publicKey().script(), txInsMeta[i].txOut.amount, sighashType);
                                 }else{ // P2PKH / DIRECT_SCRIPT
-                                    tx.sigHash(h, i, txInsMeta[i].txOut.scriptPubkey);
+                                    tx.sigHash(h, i, txInsMeta[i].txOut.scriptPubkey, sighashType);
                                 }
                             }
                         }
@@ -666,7 +699,7 @@ uint8_t PSBT::sign(const HDPrivateKey root){
                         uint8_t varr[100];
                         len = 1+sig.serialize(varr+1, 99);
                         varr[0] = len;
-                        varr[len] = SIGHASH_ALL;
+                        varr[len] = (uint8_t)(sighashType & 0xff);
                         Script val;
                         val.parse(varr, len+1);
                         add(i+1, &k, &val);

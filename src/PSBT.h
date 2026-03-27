@@ -24,6 +24,8 @@ typedef struct{
     PublicKey pubkey;
     /** \brief Signature we generated */
     Signature signature;
+    /** \brief Serialized sighash byte appended to the DER signature */
+    uint8_t sighashType;
 } PSBTPartialSignature;
 
 /** \brief Data required for input signing */
@@ -42,6 +44,9 @@ typedef struct{
     /** \brief Signatures we will generate. In most cases will be just one. */
     PSBTPartialSignature * signatures;
     uint8_t signaturesLen;
+    /** \brief Requested sighash type from PSBT_IN_SIGHASH_TYPE */
+    uint32_t sighashType;
+    uint8_t hasSighashType;
 } PSBTInputMetadata;
 
 /** \brief Data required to confirm ownership of the output */
