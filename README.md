@@ -3,23 +3,32 @@
 C++ Neurai library for 32-bit microcontrollers. The library supports [Arduino IDE](https://www.arduino.cc/), [ARM mbed](https://www.mbed.com/en/) and bare metal.<br>
 It provides a collection of convenient classes for Neurai: private and public keys, HD wallets, generation of the recovery phrases, PSBT transaction formats, scripts — everything required for a hardware wallet or other neurai-powered device.
 
+Optional **Post-Quantum** support (ML-DSA-44, NIP-022, BIP-350 bech32m addresses, witness-v1 AuthScript transactions) is available behind the `-DUNEURAI_ENABLE_PQ` build flag — see the [Post-Quantum support](#post-quantum-support-ml-dsa-44-nip-022) section.
+
 The library should work on any decent 32-bit microcontroller, like esp32, riscV, stm32 series and others. It *doesn't work* on 8-bit microcontrollers like a classic Arduino as these microcontrollers are not powerful enough to run complicated crypto algorithms.
 
 We use elliptic curve implementation from [trezor-crypto](https://github.com/trezor/trezor-firmware/tree/master/crypto). API is inspired by [Jimmy Song's](https://github.com/jimmysong/) Porgramming Blockchain class and the [book](https://github.com/jimmysong/programmingbitcoin).
 
 ## Documentation
 
-In progress...
+In progress.
+
+Pending full API docs, the host test suite under [`tests/`](tests/) is the most concise reference: every public primitive has at least one assertion that exercises it (BIP-39, BIP-32, bech32/bech32m, AuthScript primitives, NIP-022 HD-PQ, sighash, etc.), with vectors generated from the JS reference wallet so they double as worked examples.
 
 Telegram group: https://t.me/neuraiproject
- 
+
  ## Networks
- 
+
  Micro-Neurai supports the following network configurations:
- 
+
  - **Neurai**: (Default) The mainnet network. Uses BIP-44 coin type `1900`.
  - **NeuraiLegacy**: Mainnet network using BIP-44 coin type `0`. Compatible with legacy wallet implementations.
  - **NeuraiTest**: The testnet network.
+
+ Post-Quantum networks (only present when built with `-DUNEURAI_ENABLE_PQ`):
+
+ - **NeuraiPQ**: Post-Quantum mainnet (HRP `nq`, BIP-32 purpose `100`, coin type `1900`, extended-key version `xpqpriv`).
+ - **NeuraiPQTest**: Post-Quantum testnet (HRP `tnq`, coin type `1`, extended-key version `tpqpriv`).
 
 ## Installation
 
@@ -135,6 +144,46 @@ build_flags = -DUNEURAI_ENABLE_PQ
    (`platform.txt` / boards manager build options).
 3. Open `File → Examples → uNeurai → neurai_pq` and flash it. The sketch runs
    inside a FreeRTOS task with a 64 KB stack — ML-DSA-44 keygen needs ~30 KB.
+
+### PQ usage example
+
+End-to-end flow: derive an ML-DSA-44 key via NIP-022 from a BIP-39 mnemonic, get
+the corresponding `tnq1…` address, then sign a transaction input with witness v1
+AuthScript.
+
+```cpp
+#include "Neurai.h"
+#include "NeuraiPQ.h"
+
+// 1. HD-PQ derivation (NIP-022, hardened-only). Host-compilable.
+PQHDPrivateKey master;
+master.fromMnemonic("...12-word mnemonic...", /*mlen*/ 71, "", 0, &NeuraiPQTest);
+
+PQHDPrivateKey child;
+master.derive("m_pq/100'/1'/0'/0'/0'", &child);
+
+// 2. ML-DSA-44 key pair + address (ESP32-only — needs mldsa-esp32).
+uint8_t pk[UNEURAI_PQ_PUBKEY_RAW_LEN];  // 1312 bytes
+uint8_t sk[2560];
+child.materializeKeyPair(pk, sk);       // ~1-2 s on ESP32-S3
+
+char addr[100] = {0};
+pqAddressFromPubKey(&NeuraiPQTest, pk, addr, sizeof(addr));
+// addr -> "tnq1pdsj0aztvgwv3rwgml360stpyp228zrggyga6n4sdenmetm6wv3tqzddk95"
+
+// 3. Sign one AuthScript input (witnessScript = OP_TRUE for phase 1).
+Tx tx;
+// ... populate tx.version, addInput(...), addOutput(...) ...
+uint8_t opTrue[1] = { 0x51 };
+Script witnessScript(opTrue, 1);
+tx.signAuthScriptInputPQ(/*input*/ 0, sk, pk,
+                         /*amount sats*/ 100000000ULL,
+                         witnessScript, SIGHASH_ALL);
+// tx.txIns[0].witness now carries [authType, sig||hashType, 0x05||pk, witnessScript]
+```
+
+See [`examples/neurai_pq/neurai_pq.ino`](examples/neurai_pq/neurai_pq.ino) for a
+complete sketch running inside an `xTaskCreate(..., 65536, ...)` FreeRTOS task.
 
 ### Test vectors
 
