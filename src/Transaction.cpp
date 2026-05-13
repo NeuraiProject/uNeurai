@@ -3,6 +3,11 @@
 #include "Neurai.h"
 #include "Hash.h"
 #include "Conversion.h"
+#include "NeuraiPQ.h"
+
+#if defined(UNEURAI_ENABLE_PQ) && defined(ARDUINO_ARCH_ESP32)
+#include <MLDSA44.h>
+#endif
 #include "utility/trezor/sha2.h"
 
 #if USE_STD_STRING
@@ -864,3 +869,60 @@ Signature Tx::signSegwitInput(uint8_t inputIndex, const PrivateKey pk, const Scr
 
     return sig;
 }
+
+#if defined(UNEURAI_ENABLE_PQ) && defined(ARDUINO_ARCH_ESP32)
+int Tx::signAuthScriptInputPQ(uint8_t inputIndex,
+                              const uint8_t * pqSecretKey,
+                              const uint8_t * pqPublicKey,
+                              uint64_t amount,
+                              const Script witnessScript,
+                              SigHashType sighash){
+    if(pqSecretKey == NULL || pqPublicKey == NULL) return 0;
+    if(inputIndex >= inputsNumber) return 0;
+
+    /* 1. AuthScript sighash (authType = 0x01 = PQ). */
+    uint8_t h[32];
+    sigHashAuthScript(h, inputIndex, witnessScript, amount,
+                      UNEURAI_AUTHTYPE_PQ, sighash);
+
+    /* 2. ML-DSA-44 signature. */
+    uint8_t sig[MLDSA44::SIGNATURE_SIZE];
+    size_t siglen = 0;
+    int r = MLDSA44::sign(sig, &siglen, h, 32, pqSecretKey);
+    if(r != 0 || siglen != MLDSA44::SIGNATURE_SIZE) return 0;
+
+    /* 3. Build witness stack. Each push() prepends the varint length.
+     *      [authType=0x01]                — 1 byte
+     *      [sig || hashType]              — 2421 bytes (2420 + 1)
+     *      [0x05 || pqPubKey]             — 1313 bytes
+     *      [witnessScript]                — e.g. 1 byte (OP_TRUE) */
+    Witness w;
+
+    uint8_t authTypeByte = UNEURAI_AUTHTYPE_PQ;
+    w.push(&authTypeByte, 1);
+
+    /* sig || hashType (single-byte hashType, as in BIP-143 witness encoding). */
+    uint8_t sigWithType[MLDSA44::SIGNATURE_SIZE + 1];
+    memcpy(sigWithType, sig, siglen);
+    sigWithType[siglen] = (uint8_t)sighash;
+    w.push(sigWithType, siglen + 1);
+
+    /* 0x05 || pqPubKey (1313 bytes). Built on stack — caller already runs in
+     * an xTaskCreate(..., >= 64 KB stack, ...) task. */
+    uint8_t serPub[1 + UNEURAI_PQ_PUBKEY_RAW_LEN];
+    serPub[0] = UNEURAI_PQ_PUBKEY_PREFIX;
+    memcpy(serPub + 1, pqPublicKey, UNEURAI_PQ_PUBKEY_RAW_LEN);
+    w.push(serPub, sizeof(serPub));
+
+    /* witnessScript bytes (the raw script body, push() adds the varint). */
+    w.push(witnessScript.scriptArray, witnessScript.scriptLen);
+
+    txIns[inputIndex].witness = w;
+
+    /* AuthScript spends use an empty scriptSig. */
+    Script empty;
+    txIns[inputIndex].scriptSig = empty;
+
+    return 1;
+}
+#endif

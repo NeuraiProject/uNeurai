@@ -5,6 +5,10 @@
 #include "Conversion.h"
 #include "utility/segwit_addr.h"
 
+#if defined(UNEURAI_ENABLE_PQ) && defined(ARDUINO_ARCH_ESP32)
+#include <MLDSA44.h>
+#endif
+
 const ChainNetworkPQ NeuraiPQ = {
     "nq",                                // bech32 hrp
     1,                                   // witness version
@@ -292,6 +296,15 @@ size_t PQHDPrivateKey::xpqp(char *out, size_t outLen) const{
     out[l] = '\0';
     return l;
 }
+
+#if defined(UNEURAI_ENABLE_PQ) && defined(ARDUINO_ARCH_ESP32)
+int PQHDPrivateKey::materializeKeyPair(uint8_t pk[UNEURAI_PQ_PUBKEY_RAW_LEN], uint8_t sk[2560]) const{
+    if(pk == NULL || sk == NULL) return 0;
+    /* MLDSA44::generateKeypairFromSeed expects 32-byte seed (MLDSA_SEEDBYTES). */
+    int r = MLDSA44::generateKeypairFromSeed(pk, sk, pqSeed);
+    return r == 0 ? 1 : 0;
+}
+#endif
 
 int PQHDPrivateKey::fromXpqp(const char *str, const ChainNetworkPQ *net){
     if(str == NULL || net == NULL) return 0;

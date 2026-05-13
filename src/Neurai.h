@@ -677,6 +677,25 @@ public:
                           uint8_t authType,
                           SigHashType sighash = SIGHASH_ALL) const;
 
+#if defined(UNEURAI_ENABLE_PQ) && defined(ARDUINO_ARCH_ESP32)
+    /** \brief Sign an AuthScript witness-v1 input with ML-DSA-44 (authType=0x01).
+     *         Replaces scriptSig with empty and fills txIns[inputIndex].witness
+     *         with the AuthScript stack:
+     *             [authType=0x01], [sig||hashType], [0x05||pqPubKey], [witnessScript]
+     *
+     *         pqSecretKey: 2560 raw bytes from ML-DSA-44 KeyGen
+     *         pqPublicKey: 1312 raw bytes (no leading 0x05 — the function adds it)
+     *
+     *         Returns 1 on success, 0 on error. ESP32-only because it requires
+     *         the mldsa-esp32 backend. */
+    int signAuthScriptInputPQ(uint8_t inputIndex,
+                              const uint8_t * pqSecretKey,
+                              const uint8_t * pqPublicKey,
+                              uint64_t amount,
+                              const Script witnessScript,
+                              SigHashType sighash = SIGHASH_ALL);
+#endif
+
 #if 0
     /** \brief sorts inputs and outputs in alphabetical order */
     void sort();
