@@ -2,6 +2,7 @@
 #include "Hash.h"
 #include "Conversion.h"
 #include "OpCodes.h"
+#include "NeuraiPQ.h"
 #include "utility/segwit_addr.h"
 
 #if USE_STD_STRING
@@ -10,6 +11,18 @@ using std::string;
 #endif
 
 #define MAX_SCRIPT_SIZE 10000
+
+/* Witness version <-> opcode helpers.
+ * Witness version is 0..16. Opcode for v0 is OP_0 (0x00); for v1..v16 it's OP_1..OP_16 (0x51..0x60).
+ */
+static inline uint8_t witver_to_opcode(int witver){
+    return witver == 0 ? 0x00 : (uint8_t)(0x50 + witver);
+}
+static inline int opcode_to_witver(uint8_t op){
+    if (op == 0x00) return 0;
+    if (op >= 0x51 && op <= 0x60) return op - 0x50;
+    return -1;
+}
 
 //------------------------------------------------------------ Script-generating functions
 
@@ -145,12 +158,34 @@ void Script::fromAddress(const char * address){
         return;
     }
     ScriptType type = UNKNOWN_TYPE;
-    const ChainNetwork * network;
+    const ChainNetwork * network = NULL;
+    const ChainNetworkPQ * pqNetwork = NULL;
+    /* Legacy bech32 networks. Skip HRPs of length 0 (current Networks.cpp uses ""
+     * for non-segwit chains, which would otherwise match every address) and require
+     * the '1' separator right after the HRP. */
     for(int i=0; i<networks_len; i++){
-        if(memcmp(address, networks[i]->bech32, strlen(networks[i]->bech32))==0){
+        size_t hrpLen = strlen(networks[i]->bech32);
+        if(hrpLen > 0
+           && len > hrpLen
+           && memcmp(address, networks[i]->bech32, hrpLen) == 0
+           && address[hrpLen] == '1'){
             type = P2WPKH;
             network = networks[i];
             break;
+        }
+    }
+    /* PQ bech32m networks (witness v1 AuthScript). */
+    if(type == UNKNOWN_TYPE){
+        for(size_t i=0; i<pqNetworks_len; i++){
+            size_t hrpLen = strlen(pqNetworks[i]->bech32);
+            if(hrpLen > 0
+               && len > hrpLen
+               && memcmp(address, pqNetworks[i]->bech32, hrpLen) == 0
+               && address[hrpLen] == '1'){
+                pqNetwork = pqNetworks[i];
+                type = P2AUTHSCRIPT;
+                break;
+            }
         }
     }
     // segwit
@@ -165,8 +200,22 @@ void Script::fromAddress(const char * address){
         scriptLen = prog_len + 2;
         scriptArray = (uint8_t *) calloc( scriptLen, sizeof(uint8_t));
         if(scriptArray == NULL){ scriptLen = 0; return; }
-        scriptArray[0] = ver;
+        scriptArray[0] = witver_to_opcode(ver);
         scriptArray[1] = prog_len; // varint?
+        memcpy(scriptArray+2, prog, prog_len);
+    }else if(type == P2AUTHSCRIPT){
+        int ver = 0;
+        uint8_t prog[40];
+        size_t prog_len = 0;
+        int r = segwit_addr_decode(&ver, prog, &prog_len, pqNetwork->bech32, address);
+        if(r != 1 || ver != 1 || prog_len != 32){
+            return;
+        }
+        scriptLen = prog_len + 2;
+        scriptArray = (uint8_t *) calloc( scriptLen, sizeof(uint8_t));
+        if(scriptArray == NULL){ scriptLen = 0; return; }
+        scriptArray[0] = witver_to_opcode(ver); // 0x51
+        scriptArray[1] = (uint8_t)prog_len;     // 0x20
         memcpy(scriptArray+2, prog, prog_len);
     }else{ // legacy or nested segwit
         int l = fromBase58Check(address, len, addr, sizeof(addr));
@@ -362,6 +411,13 @@ ScriptType Script::type() const{
     ){
         return P2WSH;
     }
+    if(
+        (scriptLen == 34) &&
+        (scriptArray[0] == 0x51) &&  // OP_1
+        (scriptArray[1] == 32)
+    ){
+        return P2AUTHSCRIPT;
+    }
     return UNKNOWN_TYPE;
 }
 size_t Script::address(char * buffer, size_t len, const ChainNetwork * network) const{
@@ -394,7 +450,9 @@ size_t Script::address(char * buffer, size_t len, const ChainNetwork * network) 
     }
     if(type() == P2WPKH || type() == P2WSH){
         char address[76] = { 0 };
-        segwit_addr_encode(address, network->bech32, scriptArray[0], scriptArray+2, scriptArray[1]);
+        int witver = opcode_to_witver(scriptArray[0]);
+        if(witver < 0) return 0;
+        segwit_addr_encode(address, network->bech32, witver, scriptArray+2, scriptArray[1]);
         size_t l = strlen(address);
         if(l > len){
             return 0;
@@ -404,8 +462,33 @@ size_t Script::address(char * buffer, size_t len, const ChainNetwork * network) 
     }
     return 0;
 }
+
+size_t Script::address(char * buffer, size_t len, const ChainNetworkPQ * network) const{
+    if(buffer == NULL || len == 0 || network == NULL) return 0;
+    memset(buffer, 0, len);
+    if(type() != P2AUTHSCRIPT) return 0;
+    int witver = opcode_to_witver(scriptArray[0]);
+    if(witver < 0) return 0;
+    char address[100] = { 0 };
+    if(!segwit_addr_encode(address, network->bech32, witver, scriptArray+2, scriptArray[1])){
+        return 0;
+    }
+    size_t l = strlen(address);
+    if(l > len) return 0;
+    memcpy(buffer, address, l);
+    return l;
+}
+
 #if USE_ARDUINO_STRING || USE_STD_STRING
 String Script::address(const ChainNetwork * network) const{
+    char buffer[100] = { 0 };
+    size_t l = address(buffer, sizeof(buffer), network);
+    if(l == 0){
+        return String("");
+    }
+    return String(buffer);
+}
+String Script::address(const ChainNetworkPQ * network) const{
     char buffer[100] = { 0 };
     size_t l = address(buffer, sizeof(buffer), network);
     if(l == 0){

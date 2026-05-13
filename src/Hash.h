@@ -135,4 +135,10 @@ protected:
     HMAC_SHA512_CTX ctx;
 };
 
+/* BIP-39 seed derivation: PBKDF2-HMAC-SHA512(mnemonic, "mnemonic"||password, 2048, 64). */
+void bip39SeedFromMnemonic(const char * mnemonic, size_t mnemonicSize,
+                           const char * password, size_t passwordSize,
+                           uint8_t seed[64],
+                           void (*progress_callback)(float) = nullptr);
+
 #endif // __HASH_H__18NLNNCSJ2

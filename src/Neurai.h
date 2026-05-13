@@ -48,7 +48,9 @@ enum ScriptType{
     P2WSH,
     P2SH_P2WPKH,
     P2SH_P2WSH,
-    MULTISIG
+    MULTISIG,
+    /** \brief Witness v1 AuthScript: OP_1 <32-byte commitment> (Neurai PQ) */
+    P2AUTHSCRIPT
 };
 
 /** \brief SigHash types */
@@ -67,6 +69,7 @@ class HDPublicKey;
 class HDPrivateKey;
 class Script;
 class TxIn;
+struct ChainNetworkPQ; // defined in NeuraiPQ.h
 
 const char * generateMnemonic(uint8_t numWords);
 const char * generateMnemonic(uint8_t numWords, const uint8_t * entropy_data, size_t dataLen);
@@ -456,11 +459,15 @@ public:
     ScriptType type() const;
     /** \brief returns address corresponding to the script */
     size_t address(char * buffer, size_t len, const ChainNetwork * network = &DEFAULT_NETWORK) const;
+    /** \brief returns PQ address (P2AUTHSCRIPT only); returns 0 for other types */
+    size_t address(char * buffer, size_t len, const ChainNetworkPQ * network) const;
 #if USE_ARDUINO_STRING
     String address(const ChainNetwork * network = &DEFAULT_NETWORK) const;
+    String address(const ChainNetworkPQ * network) const;
 #endif
 #if USE_STD_STRING
     std::string address(const ChainNetwork * network = &DEFAULT_NETWORK) const;
+    std::string address(const ChainNetworkPQ * network) const;
 #endif
 
     /** \brief length of the script with varint */
@@ -661,6 +668,14 @@ public:
     int hashSequence(uint8_t h[32]) const;
     int hashOutputs(uint8_t h[32]) const;
     int sigHashSegwit(uint8_t h[32], uint8_t inputIndex, const Script scriptPubKey, uint64_t amount, SigHashType sighash = SIGHASH_ALL) const;
+
+    /** \brief BIP-143-style sighash for Neurai AuthScript inputs (witness v1).
+     *         Differs from sigHashSegwit only in that an `authType` byte is
+     *         inserted between `locktime` and `hashType` in the preimage. */
+    int sigHashAuthScript(uint8_t h[32], uint8_t inputIndex,
+                          const Script witnessScript, uint64_t amount,
+                          uint8_t authType,
+                          SigHashType sighash = SIGHASH_ALL) const;
 
 #if 0
     /** \brief sorts inputs and outputs in alphabetical order */

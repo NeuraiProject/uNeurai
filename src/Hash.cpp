@@ -190,3 +190,34 @@ int sha512Hmac(const uint8_t * key, size_t keyLen, const uint8_t * data, size_t 
     uxna_hmac_sha512(key, keyLen, data, dataLen, hash);
     return 64;
 }
+
+#define BIP39_PBKDF2_ROUNDS 2048
+
+void bip39SeedFromMnemonic(const char * mnemonic, size_t mnemonicSize,
+                           const char * password, size_t passwordSize,
+                           uint8_t seed[64],
+                           void (*progress_callback)(float)){
+    const char salt[] = "mnemonic";
+    const uint8_t ind[4] = { 0, 0, 0, 1 };
+    uint8_t u[64] = { 0 };
+    SHA512 sha;
+
+    sha.beginHMAC((const uint8_t *)mnemonic, mnemonicSize);
+    sha.write((const uint8_t *)salt, sizeof(salt) - 1);
+    sha.write((const uint8_t *)password, passwordSize);
+    sha.write(ind, sizeof(ind));
+    sha.endHMAC(u);
+    memcpy(seed, u, 64);
+
+    for (int i = 1; i < BIP39_PBKDF2_ROUNDS; i++){
+        if (progress_callback != nullptr && (i & 0xFF) == 0xFF){
+            progress_callback((float)i / (float)(BIP39_PBKDF2_ROUNDS - 1));
+        }
+        sha.beginHMAC((const uint8_t *)mnemonic, mnemonicSize);
+        sha.write(u, sizeof(u));
+        sha.endHMAC(u);
+        for (size_t j = 0; j < 64; j++){
+            seed[j] ^= u[j];
+        }
+    }
+}

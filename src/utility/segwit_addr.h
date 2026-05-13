@@ -30,6 +30,15 @@ extern "C"
 
 #define MAX_BECH32_SIZE 1000 // for lightning
 
+/** Bech32 / Bech32m checksum constants (final XOR after polymod).
+ *  BIP-173 (witness v0)  → BECH32  = 1
+ *  BIP-350 (witness v>=1) → BECH32M = 0x2bc830a3
+ */
+enum bech32_variant {
+    BECH32  = 1,
+    BECH32M = 0x2bc830a3
+};
+
 /** Encode a SegWit address
  *
  *  Out: output:   Pointer to a buffer of size 73 + strlen(hrp) that will be
@@ -86,6 +95,15 @@ int bech32_encode(
     size_t data_len
 );
 
+/** Encode a Bech32/Bech32m string with explicit checksum variant. */
+int bech32_encode_variant(
+    char *output,
+    const char *hrp,
+    const uint8_t *data,
+    size_t data_len,
+    enum bech32_variant v
+);
+
 /** Decode a Bech32 string
  *
  *  Out: hrp:      Pointer to a buffer of size strlen(input) - 6. Will be
@@ -102,6 +120,17 @@ int bech32_decode(
     uint8_t *data,
     size_t *data_len,
     const char *input
+);
+
+/** Decode a Bech32/Bech32m string, reporting which checksum variant matched.
+ *  Returns 1 on success (with *v_out set), 0 on invalid input.
+ */
+int bech32_decode_variant(
+    char *hrp,
+    uint8_t *data,
+    size_t *data_len,
+    const char *input,
+    enum bech32_variant *v_out
 );
 
 int convert_bits(uint8_t* out, size_t* outlen, int outbits, const uint8_t* in, size_t inlen, int inbits, int pad);

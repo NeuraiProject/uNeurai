@@ -749,6 +749,64 @@ int Tx::sigHashSegwit(uint8_t h[32], uint8_t inputIndex, const Script scriptPubK
     return 32;
 }
 
+int Tx::sigHashAuthScript(uint8_t h[32], uint8_t inputIndex, const Script witnessScript,
+                          uint64_t amount, uint8_t authType, SigHashType sighash) const{
+    DoubleSha s;
+    s.begin();
+    uint8_t arr[8];
+    const uint8_t baseType = ((uint8_t)sighash) & 0x1f;
+    const bool anyoneCanPay = (((uint8_t)sighash) & SIGHASH_ANYONECANPAY) != 0;
+
+    intToLittleEndian(version, arr, 4);
+    s.write(arr, 4);
+
+    if(!anyoneCanPay){
+        hashPrevouts(h);
+    }else{
+        memset(h, 0, 32);
+    }
+    s.write(h, 32);
+
+    if(!anyoneCanPay && baseType != SIGHASH_SINGLE && baseType != SIGHASH_NONE){
+        hashSequence(h);
+    }else{
+        memset(h, 0, 32);
+    }
+    s.write(h, 32);
+
+    s.write(txIns[inputIndex].hash, 32);
+    intToLittleEndian(txIns[inputIndex].outputIndex, arr, 4);
+    s.write(arr, 4);
+    s.serialize(&witnessScript, 0);
+
+    intToLittleEndian(amount, arr, 8);
+    s.write(arr, 8);
+    intToLittleEndian(txIns[inputIndex].sequence, arr, 4);
+    s.write(arr, 4);
+
+    if(baseType != SIGHASH_SINGLE && baseType != SIGHASH_NONE){
+        hashOutputs(h);
+    }else if(baseType == SIGHASH_SINGLE && inputIndex < outputsNumber){
+        DoubleSha outputHasher;
+        outputHasher.begin();
+        outputHasher.serialize(&txOuts[inputIndex], 0);
+        outputHasher.end(h);
+    }else{
+        memset(h, 0, 32);
+    }
+    s.write(h, 32);
+
+    intToLittleEndian(locktime, arr, 4);
+    s.write(arr, 4);
+    /* AuthScript-specific: authType byte before the 4-byte hashType. */
+    s.write(&authType, 1);
+    intToLittleEndian(sighash, arr, 4);
+    s.write(arr, 4);
+
+    s.end(h);
+    return 32;
+}
+
 Signature Tx::signInput(uint8_t inputIndex, const PrivateKey pk, const Script redeemScript, SigHashType sighash){
     uint8_t h[32];
     sigHash(h, inputIndex, redeemScript, sighash);

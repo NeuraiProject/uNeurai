@@ -260,30 +260,7 @@ int HDPrivateKey::fromSeed(const uint8_t * seed, size_t seedSize, const ChainNet
 int HDPrivateKey::fromMnemonic(const char * mnemonic, size_t mnemonicSize, const char * password, size_t passwordSize, const ChainNetwork * net, void (*progress_callback)(float)){
     init();
     uint8_t seed[64] = { 0 };
-    uint8_t ind[4] = { 0, 0, 0, 1 };
-    char salt[] = "mnemonic";
-    uint8_t u[64] = { 0 };
-
-    // first round
-    SHA512 sha;
-    sha.beginHMAC((uint8_t *)mnemonic, mnemonicSize);
-    sha.write((uint8_t *)salt, strlen(salt));
-    sha.write((uint8_t *)password, passwordSize);
-    sha.write(ind, sizeof(ind));
-    sha.endHMAC(u);
-    memcpy(seed, u, 64);
-    // other rounds
-    for(int i=1; i<PBKDF2_ROUNDS; i++){
-        if(progress_callback != NULL && (i & 0xFF) == 0xFF){
-            progress_callback((float)i/(float)(PBKDF2_ROUNDS-1));
-        }
-        sha.beginHMAC((uint8_t *)mnemonic, mnemonicSize);
-        sha.write(u, sizeof(u));
-        sha.endHMAC(u);
-        for(size_t j=0; j<sizeof(seed); j++){
-            seed[j] = seed[j] ^ u[j];
-        }
-    }
+    bip39SeedFromMnemonic(mnemonic, mnemonicSize, password, passwordSize, seed, progress_callback);
     fromSeed(seed, sizeof(seed), net);
     return 1;
 }

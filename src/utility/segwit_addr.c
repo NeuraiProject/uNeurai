@@ -47,7 +47,7 @@ static const int8_t charset_rev[128] = {
      1,  0,  3, 16, 11, 28, 12, 14,  6,  4,  2, -1, -1, -1, -1, -1
 };
 
-int bech32_encode(char *output, const char *hrp, const uint8_t *data, size_t data_len) {
+int bech32_encode_variant(char *output, const char *hrp, const uint8_t *data, size_t data_len, enum bech32_variant v) {
     uint32_t chk = 1;
     size_t i = 0;
     while (hrp[i] != 0) {
@@ -75,7 +75,7 @@ int bech32_encode(char *output, const char *hrp, const uint8_t *data, size_t dat
     for (i = 0; i < 6; ++i) {
         chk = bech32_polymod_step(chk);
     }
-    chk ^= 1;
+    chk ^= (uint32_t)v;
     for (i = 0; i < 6; ++i) {
         *(output++) = charset[(chk >> ((5 - i) * 5)) & 0x1f];
     }
@@ -83,7 +83,11 @@ int bech32_encode(char *output, const char *hrp, const uint8_t *data, size_t dat
     return 1;
 }
 
-int bech32_decode(char* hrp, uint8_t *data, size_t *data_len, const char *input) {
+int bech32_encode(char *output, const char *hrp, const uint8_t *data, size_t data_len) {
+    return bech32_encode_variant(output, hrp, data, data_len, BECH32);
+}
+
+int bech32_decode_variant(char* hrp, uint8_t *data, size_t *data_len, const char *input, enum bech32_variant *v_out) {
     uint32_t chk = 1;
     size_t i;
     size_t input_len = strlen(input);
@@ -137,7 +141,22 @@ int bech32_decode(char* hrp, uint8_t *data, size_t *data_len, const char *input)
     if (have_lower && have_upper) {
         return 0;
     }
-    return chk == 1;
+    if (chk == (uint32_t)BECH32) {
+        if (v_out) *v_out = BECH32;
+        return 1;
+    }
+    if (chk == (uint32_t)BECH32M) {
+        if (v_out) *v_out = BECH32M;
+        return 1;
+    }
+    return 0;
+}
+
+int bech32_decode(char* hrp, uint8_t *data, size_t *data_len, const char *input) {
+    enum bech32_variant v;
+    if (!bech32_decode_variant(hrp, data, data_len, input, &v)) return 0;
+    /* Preserve BIP-173 strict behavior: only accept the classic bech32 checksum. */
+    return v == BECH32;
 }
 
 int convert_bits(uint8_t* out, size_t* outlen, int outbits, const uint8_t* in, size_t inlen, int inbits, int pad) {
@@ -165,23 +184,28 @@ int convert_bits(uint8_t* out, size_t* outlen, int outbits, const uint8_t* in, s
 int segwit_addr_encode(char *output, const char *hrp, int witver, const uint8_t *witprog, size_t witprog_len) {
     uint8_t data[65];
     size_t datalen = 0;
-    if (witver > 16) return 0;
+    if (witver < 0 || witver > 16) return 0;
     if (witver == 0 && witprog_len != 20 && witprog_len != 32) return 0;
     if (witprog_len < 2 || witprog_len > 40) return 0;
-    data[0] = witver;
+    data[0] = (uint8_t)witver;
     convert_bits(data + 1, &datalen, 5, witprog, witprog_len, 8, 1);
     ++datalen;
-    return bech32_encode(output, hrp, data, datalen);
+    enum bech32_variant v = (witver == 0) ? BECH32 : BECH32M;
+    return bech32_encode_variant(output, hrp, data, datalen, v);
 }
 
 int segwit_addr_decode(int* witver, uint8_t* witdata, size_t* witdata_len, const char* hrp, const char* addr) {
     uint8_t data[84];
     char hrp_actual[84];
     size_t data_len;
-    if (!bech32_decode(hrp_actual, data, &data_len, addr)) return 0;
+    enum bech32_variant got;
+    if (!bech32_decode_variant(hrp_actual, data, &data_len, addr, &got)) return 0;
     if (data_len == 0 || data_len > 65) return 0;
     if (strncmp(hrp, hrp_actual, 84) != 0) return 0;
     if (data[0] > 16) return 0;
+    /* Reject cross-variant: v0 requires BECH32, v>=1 requires BECH32M. */
+    if (data[0] == 0 && got != BECH32) return 0;
+    if (data[0] != 0 && got != BECH32M) return 0;
     *witdata_len = 0;
     if (!convert_bits(witdata, witdata_len, 8, data + 1, data_len - 1, 5, 0)) return 0;
     if (*witdata_len < 2 || *witdata_len > 40) return 0;
