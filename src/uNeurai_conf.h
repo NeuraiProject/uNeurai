@@ -5,6 +5,22 @@
 //#define DEFAULT_NETWORK NeuraiTest
 #define DEFAULT_NETWORK Neurai
 
+/* ---- Post-Quantum support (NIP-022 / ML-DSA-44) ----
+ * Enables PQHDPrivateKey::materializeKeyPair() and Tx::signAuthScriptInputPQ().
+ *
+ * The flag MUST be visible to every library .cpp file. The Arduino IDE does NOT
+ * propagate a #define written in your .ino to the library sources, so defining
+ * it only in the sketch makes linking fail with "undefined reference to
+ * PQHDPrivateKey::materializeKeyPair / Tx::signAuthScriptInputPQ". Defining it
+ * here (or passing -DUNEURAI_ENABLE_PQ as a global build flag) fixes that.
+ *
+ * Requires the mldsa-esp32 library (https://github.com/NeuraiProject/mldsa-esp32)
+ * and an ESP32 target. If you do NOT use PQ, comment the block below out so the
+ * library stays independent of mldsa-esp32. */
+#ifndef UNEURAI_ENABLE_PQ
+#define UNEURAI_ENABLE_PQ
+#endif
+
 /* Change this config file to adjust to your framework */
 #ifndef USE_STDONLY
   #ifdef ARDUINO

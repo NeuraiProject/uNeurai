@@ -1,6 +1,7 @@
 #ifndef __UXNA_NEURAI_PQ_H__
 #define __UXNA_NEURAI_PQ_H__
 
+#include "uNeurai_conf.h"   // so UNEURAI_ENABLE_PQ reaches the guards below and NeuraiPQ.cpp
 #include <stdint.h>
 #include <stddef.h>
 
