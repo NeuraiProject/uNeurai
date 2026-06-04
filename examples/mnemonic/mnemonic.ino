@@ -7,7 +7,7 @@
 #include "Neurai.h"
 
 void printHD(String mnemonic, String password = ""){
-  const Network * targetNetwork = &Neurai;
+  const ChainNetwork * targetNetwork = &Neurai;
 
   HDPrivateKey hd(mnemonic, password, targetNetwork);
 

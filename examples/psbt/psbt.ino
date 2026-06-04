@@ -22,7 +22,7 @@ void setup() {
   Serial.println("Outputs:");
   for(int i=0; i<psbt.tx.outputsNumber; i++){
     // print addresses
-    Serial.print(psbt.tx.txOuts[i].address(&Regtest));
+    Serial.print(psbt.tx.txOuts[i].address(&NeuraiTest));
     if(psbt.txOutsMeta[i].derivationsLen > 0){ // there is derivation path
       // considering only single key for simplicity
       PSBTDerivation der = psbt.txOutsMeta[i].derivations[0];

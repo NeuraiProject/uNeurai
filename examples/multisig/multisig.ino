@@ -19,7 +19,7 @@ HDPublicKey xpubs[] = {
 };
 
 void setup() {
-  Serial.begin();
+  Serial.begin(115200);
 
   // print first 5 addresses
   for(int idx = 0; idx < 5; idx++){
@@ -41,7 +41,7 @@ void setup() {
     Serial.print("address ");
     Serial.print(idx);
     Serial.print(": ");
-    Serial.println(script_pubkey.address(&Regtest));
+    Serial.println(script_pubkey.address(&NeuraiTest));
   }
 }
 
