@@ -1,47 +1,78 @@
 /*
- * This example shows how parse and sign PSBT transaction
+ * Neurai legacy transaction build + sign demo.
+ *
+ * (This example used to parse a hard-coded Bitcoin-testnet PSBT. Neurai uses
+ * legacy P2PKH transactions, so it now derives a key from a BIP-39 mnemonic,
+ * builds a 1-input / 2-output P2PKH transaction and signs it with SIGHASH_ALL.)
+ *
+ * The same flow runs on both Neurai mainnet and NeuraiTest. The previous-output
+ * reference (txid/vout/amount) is illustrative - replace it with a real UTXO you
+ * own before broadcasting. The mnemonic below is a well-known test vector;
+ * NEVER use it with real funds.
  */
 
+#include <Arduino.h>
 #include "Neurai.h"
-#include "PSBT.h"
 
-HDPrivateKey hd("flight canvas heart purse potato mixed offer tooth maple blue kitten salute almost staff physical remain coral clump midnight rotate innocent shield inch ski", "");
-PSBT psbt;
+static const char MNEMONIC[] =
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+// Illustrative UTXO being spent (replace with a real one to broadcast).
+static const char PREV_TXID[] = "fbeae5f43d76fc3035cb4190baaf8cc123dd04f11c98c8f19a8b12cb4ce90db0";
+static const uint32_t PREV_VOUT = 0;
+
+static void buildAndSign(const char * label, const ChainNetwork * net, uint32_t coinType){
+  Serial.println();
+  Serial.print("=== "); Serial.print(label); Serial.println(" ===");
+
+  // 1. Derive a signing key: m/44'/coin'/0'/0/index
+  HDPrivateKey root(MNEMONIC, "", net);
+  String base = String("m/44'/") + String(coinType) + String("'/0'/0/");
+  HDPrivateKey signKey = root.derive((base + "0/").c_str());   // receive #0
+  HDPrivateKey changeKey = signKey;                            // reuse for change
+  HDPrivateKey destKey  = root.derive((base + "1/").c_str());  // receive #1 (destination)
+
+  String fromAddr = signKey.publicKey().address(net);
+  String destAddr = destKey.publicKey().address(net);
+  Serial.print("from address:        "); Serial.println(fromAddr);
+  Serial.print("destination address: "); Serial.println(destAddr);
+
+  // 2. Amounts (in satoshis; 1 XNA = 100,000,000 sat)
+  uint64_t availableAmount = 200000000ULL; // 2 XNA UTXO (illustrative)
+  uint64_t fee             = 100000ULL;    // 0.001 XNA
+  uint64_t sendAmount      = 50000000ULL;  // 0.5 XNA
+  uint64_t changeAmount    = availableAmount - sendAmount - fee;
+
+  // 3. Build the transaction
+  Tx tx;
+  TxIn txIn(PREV_TXID, PREV_VOUT);
+  tx.addInput(txIn);
+  tx.addOutput(TxOut(sendAmount, destAddr.c_str()));
+  tx.addOutput(TxOut(changeAmount, fromAddr.c_str()));
+
+  Serial.println("unsigned tx:");
+  Serial.println(tx);
+
+  // 4. Sign input 0 (P2PKH, SIGHASH_ALL)
+  Signature sig = tx.signInput(0, signKey);
+  Serial.print("signature: "); Serial.println(sig);
+
+  Serial.println("signed tx:");
+  Serial.println(tx);
+  Serial.print("txid: "); Serial.println(tx.txid());
+}
 
 void setup() {
   Serial.begin(115200);
-  // 2-input psbt
-  psbt.parseBase64("cHNidP8BAJoCAAAAAqQW9JR6TFv46IXybtf9tKAy5WsYusr6O4rsfN8DIywEAQAAAAD9////9YKXV2aJad3wScN70cgZHMhQtwhTjw95loZfUB57+H4AAAAAAP3///8CwOHkAAAAAAAWABQzSSTq9G6AboazU3oS+BWVAw1zp21KTAAAAAAAFgAU2SSg4OQMonZrrLpdtTzcNes1MthDAQAAAAEAcQIAAAAB6GDWQUAnmq5s8Nm68qPp3fHnpARmx67Q5ZRHGj1rCjgBAAAAAP7///8CdIv2XwAAAAAWABRozVhYn14Pmv8XoAJePV7AQggf/4CWmAAAAAAAFgAUcOVKtnxrbE7ragGagzMqQ7kJsZkAAAAAAQEfgJaYAAAAAAAWABRw5Uq2fGtsTutqAZqDMypDuQmxmSIGA3s6OgE8GCKOcHDJe7XY0q/i/XSe6e933ErCDCCKR5WoGARkI4xUAACAAQAAgAAAAIAAAAAAAAAAAAABAHECAAAAAaH0XE8I0jQHvCDfdDTUbHrm9+oHbq1yt5ansxoaeeNjAQAAAAD+////AoCWmAAAAAAAFgAUQZD8n6hVi91tRSlWl4WkMwuBnoXsVTuMAAAAABYAFMbknFZNyqOzappeWfZi2+EP0asDAAAAAAEBH4CWmAAAAAAAFgAUQZD8n6hVi91tRSlWl4WkMwuBnoUiBgKNwymEX374HvJHU9FIT4YmCn8CuNteCOxtw7bJXGfscxgEZCOMVAAAgAEAAIAAAACAAAAAAAEAAAAAACICA9OwnpVPPgWAC/O7SuxHNPjX46Iz2Qv9dcI033AqEyv+GARkI4xUAACAAQAAgAAAAIABAAAAAAAAAAA=");
-  // check parsing is ok
-  if(!psbt){
-    Serial.println("Failed parsing transaction");
-    return;
-  }
-  Serial.println("Transactions details:");
-  // going through all outputs to print info
-  Serial.println("Outputs:");
-  for(int i=0; i<psbt.tx.outputsNumber; i++){
-    // print addresses
-    Serial.print(psbt.tx.txOuts[i].address(&NeuraiTest));
-    if(psbt.txOutsMeta[i].derivationsLen > 0){ // there is derivation path
-      // considering only single key for simplicity
-      PSBTDerivation der = psbt.txOutsMeta[i].derivations[0];
-      HDPublicKey pub = hd.derive(der.derivation, der.derivationLen).xpub();
-      if(pub.address() == psbt.tx.txOuts[i].address()){
-        Serial.print(" (change) ");
-      }
-    }
-    Serial.print(" -> ");
-    Serial.print(psbt.tx.txOuts[i].xnaAmount()*1e3);
-    Serial.println(" mXNA");
-  }
-  Serial.print("Fee: ");
-  Serial.print(float(psbt.fee())/100); // Arduino can't print 64-bit ints
-  Serial.println(" bits");
-  
-  psbt.sign(hd);
-  Serial.println(psbt.toBase64()); // now you can combine and finalize PSBTs in Neurai Node
+  while(!Serial){ ; }
+
+  buildAndSign("Neurai mainnet", &Neurai,     1900);
+  buildAndSign("NeuraiTest",     &NeuraiTest,    1);
+
+  Serial.println();
+  Serial.println("Done");
 }
 
 void loop() {
+  delay(1000);
 }
