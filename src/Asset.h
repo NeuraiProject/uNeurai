@@ -79,4 +79,51 @@ bool assetParseScript(const uint8_t * script, size_t scriptLen, AssetInfo * info
 /* Lightweight check: true if the script carries any asset marker. */
 bool assetIsAssetScript(const uint8_t * script, size_t scriptLen);
 
+/* ── Encoders (phase 2) ──────────────────────────────────────────────────────
+ *
+ * All encoders write into a caller-provided buffer and return the number of
+ * bytes written, or 0 on overflow / bad input (so they are allocation-free and
+ * embedded-friendly). The byte layout matches @neuraiproject/neurai-create-
+ * transaction exactly. `ipfs`/`ipfsLen` is the ALREADY-encoded 34-byte data
+ * reference (CIDv0 / TXID / raw) or NULL/0 for none — the host resolves the
+ * string form; uNeurai only embeds the bytes.
+ */
+
+/* Asset payloads (the bytes that go inside the OP_XNA_ASSET pushData). */
+size_t assetEncodeTransferPayload(const char * name, uint64_t amountRaw,
+                                  uint8_t * out, size_t cap);
+size_t assetEncodeIssuePayload(const char * name, uint64_t quantityRaw,
+                               uint8_t units, bool reissuable,
+                               const uint8_t * ipfs, size_t ipfsLen,
+                               uint8_t * out, size_t cap);
+size_t assetEncodeOwnerPayload(const char * ownerName, uint8_t * out, size_t cap);
+size_t assetEncodeReissuePayload(const char * name, uint64_t quantityRaw,
+                                 uint8_t units, bool reissuable,
+                                 const uint8_t * ipfs, size_t ipfsLen,
+                                 uint8_t * out, size_t cap);
+
+/* Wrap a base destination script + payload into a full asset scriptPubkey:
+ *     <base> OP_XNA_ASSET pushData(payload) OP_DROP
+ * `base` is the raw destination script (P2PKH 25B, P2SH 23B or AuthScript 34B). */
+size_t assetWrapScript(const uint8_t * base, size_t baseLen,
+                       const uint8_t * payload, size_t payloadLen,
+                       uint8_t * out, size_t cap);
+
+/* All-in-one: base script + fields → full asset scriptPubkey. */
+size_t assetEncodeTransferScript(const uint8_t * base, size_t baseLen,
+                                 const char * name, uint64_t amountRaw,
+                                 uint8_t * out, size_t cap);
+size_t assetEncodeIssueScript(const uint8_t * base, size_t baseLen,
+                              const char * name, uint64_t quantityRaw,
+                              uint8_t units, bool reissuable,
+                              const uint8_t * ipfs, size_t ipfsLen,
+                              uint8_t * out, size_t cap);
+size_t assetEncodeOwnerScript(const uint8_t * base, size_t baseLen,
+                              const char * ownerName, uint8_t * out, size_t cap);
+size_t assetEncodeReissueScript(const uint8_t * base, size_t baseLen,
+                                const char * name, uint64_t quantityRaw,
+                                uint8_t units, bool reissuable,
+                                const uint8_t * ipfs, size_t ipfsLen,
+                                uint8_t * out, size_t cap);
+
 #endif /* __UNEURAI_ASSET_H__R3NU8EN25O */

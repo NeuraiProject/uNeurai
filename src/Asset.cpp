@@ -204,3 +204,141 @@ bool assetIsAssetScript(const uint8_t * script, size_t scriptLen) {
     AssetInfo info;
     return assetParseScript(script, scriptLen, &info);
 }
+
+/* ── Encoders ───────────────────────────────────────────────────────────────
+ * A tiny append-only cursor with overflow tracking. Every writer is a no-op
+ * once `ok` is false, so callers only check `ok` (and the final length) once.
+ */
+struct Buf { uint8_t * p; size_t cap; size_t len; bool ok; };
+
+static void bput(Buf * b, uint8_t v) {
+    if (!b->ok) return;
+    if (b->len + 1 > b->cap) { b->ok = false; return; }
+    b->p[b->len++] = v;
+}
+static void bputn(Buf * b, const uint8_t * d, size_t n) {
+    if (!b->ok) return;
+    if (b->len + n > b->cap) { b->ok = false; return; }
+    if (n) memcpy(b->p + b->len, d, n);
+    b->len += n;
+}
+/* Minimal Bitcoin pushdata: direct (<0x4c), OP_PUSHDATA1 or OP_PUSHDATA2. */
+static void bpushdata(Buf * b, const uint8_t * d, size_t n) {
+    if (n < OP_PUSHDATA1)      { bput(b, (uint8_t)n); }
+    else if (n <= 0xff)        { bput(b, OP_PUSHDATA1); bput(b, (uint8_t)n); }
+    else if (n <= 0xffff)      { bput(b, OP_PUSHDATA2); bput(b, (uint8_t)(n & 0xff)); bput(b, (uint8_t)((n >> 8) & 0xff)); }
+    else                       { b->ok = false; return; }
+    bputn(b, d, n);
+}
+static void bvarstr(Buf * b, const char * s) {
+    size_t n = s ? strlen(s) : 0;
+    uint8_t vi[9];
+    size_t vl = writeVarInt(n, vi, sizeof(vi));
+    bputn(b, vi, vl);
+    bputn(b, (const uint8_t *)s, n);
+}
+static void bu64le(Buf * b, uint64_t v) {
+    uint8_t tmp[8];
+    intToLittleEndian(v, tmp, 8);
+    bputn(b, tmp, 8);
+}
+
+size_t assetEncodeTransferPayload(const char * name, uint64_t amountRaw,
+                                  uint8_t * out, size_t cap) {
+    Buf b = { out, cap, 0, true };
+    bputn(&b, XNA_TRANSFER_PREFIX, 4);
+    bvarstr(&b, name);
+    bu64le(&b, amountRaw);
+    return b.ok ? b.len : 0;
+}
+
+size_t assetEncodeIssuePayload(const char * name, uint64_t quantityRaw,
+                               uint8_t units, bool reissuable,
+                               const uint8_t * ipfs, size_t ipfsLen,
+                               uint8_t * out, size_t cap) {
+    Buf b = { out, cap, 0, true };
+    bputn(&b, XNA_ISSUE_PREFIX, 4);
+    bvarstr(&b, name);
+    bu64le(&b, quantityRaw);
+    bput(&b, units);
+    bput(&b, reissuable ? 1 : 0);
+    bput(&b, (ipfs && ipfsLen) ? 1 : 0);
+    if (ipfs && ipfsLen) bputn(&b, ipfs, ipfsLen);
+    return b.ok ? b.len : 0;
+}
+
+size_t assetEncodeOwnerPayload(const char * ownerName, uint8_t * out, size_t cap) {
+    Buf b = { out, cap, 0, true };
+    bputn(&b, XNA_OWNER_PREFIX, 4);
+    bvarstr(&b, ownerName);
+    return b.ok ? b.len : 0;
+}
+
+size_t assetEncodeReissuePayload(const char * name, uint64_t quantityRaw,
+                                 uint8_t units, bool reissuable,
+                                 const uint8_t * ipfs, size_t ipfsLen,
+                                 uint8_t * out, size_t cap) {
+    Buf b = { out, cap, 0, true };
+    bputn(&b, XNA_REISSUE_PREFIX, 4);
+    bvarstr(&b, name);
+    bu64le(&b, quantityRaw);
+    bput(&b, units);
+    bput(&b, reissuable ? 1 : 0);
+    if (ipfs && ipfsLen) bputn(&b, ipfs, ipfsLen); /* reissue has no hasIpfs flag */
+    return b.ok ? b.len : 0;
+}
+
+size_t assetWrapScript(const uint8_t * base, size_t baseLen,
+                       const uint8_t * payload, size_t payloadLen,
+                       uint8_t * out, size_t cap) {
+    if (!base || !payload) return 0;
+    Buf b = { out, cap, 0, true };
+    bputn(&b, base, baseLen);
+    bput(&b, OP_XNA_ASSET);
+    bpushdata(&b, payload, payloadLen);
+    bput(&b, OP_DROP);
+    return b.ok ? b.len : 0;
+}
+
+/* Scratch big enough for any standard payload: prefix(4) + varint(<=9) +
+ * name(<=128) + amount(8) + units/reissuable/hasIpfs(3) + ipfs(<=34). */
+#define ASSET_PAYLOAD_SCRATCH (NEURAI_ASSET_NAME_MAX + 64)
+
+size_t assetEncodeTransferScript(const uint8_t * base, size_t baseLen,
+                                 const char * name, uint64_t amountRaw,
+                                 uint8_t * out, size_t cap) {
+    uint8_t pl[ASSET_PAYLOAD_SCRATCH];
+    size_t pn = assetEncodeTransferPayload(name, amountRaw, pl, sizeof(pl));
+    if (!pn) return 0;
+    return assetWrapScript(base, baseLen, pl, pn, out, cap);
+}
+
+size_t assetEncodeIssueScript(const uint8_t * base, size_t baseLen,
+                              const char * name, uint64_t quantityRaw,
+                              uint8_t units, bool reissuable,
+                              const uint8_t * ipfs, size_t ipfsLen,
+                              uint8_t * out, size_t cap) {
+    uint8_t pl[ASSET_PAYLOAD_SCRATCH];
+    size_t pn = assetEncodeIssuePayload(name, quantityRaw, units, reissuable, ipfs, ipfsLen, pl, sizeof(pl));
+    if (!pn) return 0;
+    return assetWrapScript(base, baseLen, pl, pn, out, cap);
+}
+
+size_t assetEncodeOwnerScript(const uint8_t * base, size_t baseLen,
+                              const char * ownerName, uint8_t * out, size_t cap) {
+    uint8_t pl[ASSET_PAYLOAD_SCRATCH];
+    size_t pn = assetEncodeOwnerPayload(ownerName, pl, sizeof(pl));
+    if (!pn) return 0;
+    return assetWrapScript(base, baseLen, pl, pn, out, cap);
+}
+
+size_t assetEncodeReissueScript(const uint8_t * base, size_t baseLen,
+                                const char * name, uint64_t quantityRaw,
+                                uint8_t units, bool reissuable,
+                                const uint8_t * ipfs, size_t ipfsLen,
+                                uint8_t * out, size_t cap) {
+    uint8_t pl[ASSET_PAYLOAD_SCRATCH];
+    size_t pn = assetEncodeReissuePayload(name, quantityRaw, units, reissuable, ipfs, ipfsLen, pl, sizeof(pl));
+    if (!pn) return 0;
+    return assetWrapScript(base, baseLen, pl, pn, out, cap);
+}
