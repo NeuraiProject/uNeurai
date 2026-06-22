@@ -4,6 +4,7 @@
 #include "Asset.h"
 #include "AssetConstants.h"
 #include "AssetBuilder.h"
+#include "AssetName.h"
 #include "Conversion.h"
 #include <string.h>
 
@@ -451,6 +452,54 @@ MU_TEST(test_build_issue_qualifier_sub) {
     checkOut(tx, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01872766e7108234b59432f535542030000000000000000000075", "qs out2 issue");
 }
 
+/* ── Phase 5: name validation (golden table from the TS validateAndDetectType) */
+
+MU_TEST(test_name_validation) {
+    const AssetNameType R = ASSET_NAME_ROOT, S = ASSET_NAME_SUB, U = ASSET_NAME_UNIQUE,
+                        Q = ASSET_NAME_QUALIFIER, SQ = ASSET_NAME_SUB_QUALIFIER,
+                        RS = ASSET_NAME_RESTRICTED, D = ASSET_NAME_DEPIN,
+                        O = ASSET_NAME_OWNER, X = ASSET_NAME_INVALID;
+    struct Case { const char * name; AssetNameType m; AssetNameType t; };
+    static const struct Case cases[] = {
+        {"ABC", R, R}, {"AB", X, X}, {"MYTOKEN", R, R}, {"XNA", X, X}, {"NEURAI", X, X},
+        {"NEURAICOIN", X, X}, {"A.B", R, R}, {"A..B", X, X}, {".AB", X, X}, {"AB.", X, X},
+        {"A_B", R, R}, {"abc", X, X}, {"A-B", X, X},
+        {"ROOT/SUB", S, S}, {"ROOT/SUB/X", S, S}, {"ROOT/sub", X, X}, {"ROOT/", X, X},
+        {"AB/CD", X, X}, {"ROOT/.X", X, X}, {"ROOT/SUB.", X, X},
+        {"ROOT#tag", U, U}, {"ROOT#Tag_1", U, U}, {"ROOT#", X, X}, {"ROOT#a#b", X, X},
+        {"AB#tag", X, X}, {"ROOT/SUB#tag", U, U}, {"ROOT#ta g", X, X}, {"ROOT#n@m3", U, U},
+        {"#KYC", Q, Q}, {"#KY", X, X}, {"#KYC/SUB", X, X}, {"#KYC/#SUB", SQ, SQ},
+        {"#kyc", X, X}, {"#.KYC", X, X}, {"#XNA", X, X}, {"#KYC/A/B", X, X}, {"#A_B", Q, Q},
+        {"$REST", RS, RS}, {"$RE", X, X}, {"$.REST", RS, RS}, {"$rest", X, X},
+        {"$XNA", RS, RS}, {"$SEC_1", RS, RS},
+        {"&SENSOR", X, D}, {"&AB", X, X}, {"&SENSOR/DATA", X, D}, {"&SE/DATA", X, D},
+        {"&SENSOR/da", X, X}, {"&sensor", X, X},
+        {"MYTOKEN!", O, O}, {"REST!", O, O}, {"ROOT/SUB!", O, O}, {"#KYC!", X, X},
+        {"&SENSOR!", X, O}, {"!", X, X}, {"AB!", X, X}, {"ROOT!", O, O}, {"$REST!", X, X},
+    };
+    size_t count = sizeof(cases) / sizeof(cases[0]);
+    for (size_t i = 0; i < count; i++) {
+        mu_assert(assetDetectAndValidate(cases[i].name, false) == cases[i].m, cases[i].name);
+        mu_assert(assetDetectAndValidate(cases[i].name, true)  == cases[i].t, cases[i].name);
+    }
+}
+
+MU_TEST(test_name_length_limits) {
+    char buf[160];
+    memset(buf, 'A', sizeof(buf));
+    /* root/sub max is 31 (mainnet) / 120 (testnet). */
+    buf[31] = '\0';
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_ROOT, "31 chars valid on mainnet");
+    mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_ROOT, "31 chars valid on testnet");
+    buf[31] = 'A'; buf[32] = '\0';
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_INVALID, "32 chars invalid on mainnet");
+    mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_ROOT,    "32 chars valid on testnet");
+    buf[32] = 'A'; buf[120] = '\0';
+    mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_ROOT,    "120 chars valid on testnet");
+    buf[120] = 'A'; buf[121] = '\0';
+    mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_INVALID, "121 chars invalid on testnet");
+}
+
 MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_transfer_p2pkh_mainnet);
     MU_RUN_TEST(test_transfer_p2pkh_testnet);
@@ -489,6 +538,8 @@ MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_build_issue_unique);
     MU_RUN_TEST(test_build_issue_qualifier_root);
     MU_RUN_TEST(test_build_issue_qualifier_sub);
+    MU_RUN_TEST(test_name_validation);
+    MU_RUN_TEST(test_name_length_limits);
 }
 
 int main(int argc, char *argv[]) {
