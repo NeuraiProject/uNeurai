@@ -67,4 +67,50 @@ bool assetBuildReissue(Tx & tx,
 bool assetBuildTransfer(Tx & tx, const char * toAddress,
                         const char * assetName, uint64_t amountRaw);
 
+/* ── Null-asset single outputs (phase 4) ─────────────────────────────────── */
+
+/* Qualifier tag / untag on `address`. */
+bool assetAddNullTagOutput(Tx & tx, const char * address,
+                           const char * qualifierName, bool tag);
+/* Address freeze / unfreeze (freezeFlag 0 / 1). */
+bool assetAddNullRestrictionOutput(Tx & tx, const char * address,
+                                   const char * assetName, uint8_t freezeFlag);
+/* Verifier string output (the string is normalised internally). */
+bool assetAddVerifierOutput(Tx & tx, const char * verifierString);
+/* Global asset freeze / unfreeze (freezeFlag 2 / 3). */
+bool assetAddGlobalRestrictionOutput(Tx & tx, const char * assetName, uint8_t freezeFlag);
+
+/* ── Null-asset / restricted operations (append the whole output set) ─────── */
+
+/* ISSUE RESTRICTED: burn, [change], verifier, owner-token transfer, issue. */
+bool assetBuildIssueRestricted(Tx & tx,
+                               const char * burnAddress, uint64_t burnSats,
+                               const char * changeAddress, uint64_t changeSats,
+                               const char * ownerChangeAddress, const char * toAddress,
+                               const char * assetName, const char * verifierString,
+                               uint64_t quantityRaw, uint8_t units, bool reissuable,
+                               const uint8_t * ipfs, size_t ipfsLen);
+
+/* QUALIFIER TAG / UNTAG: burn, [change], qualifier transfer, one tag output per
+ * target address. `targetAddresses` is an array of `count` C-strings. */
+bool assetBuildQualifierTag(Tx & tx,
+                            const char * burnAddress, uint64_t burnSats,
+                            const char * changeAddress, uint64_t changeSats,
+                            const char * qualifierChangeAddress, const char * qualifierName,
+                            uint64_t qualifierChangeAmountRaw,
+                            const char * const * targetAddresses, size_t count, bool tag);
+
+/* FREEZE / UNFREEZE ADDRESSES: [change], owner-token transfer, one restriction
+ * output per target address (no burn). */
+bool assetBuildFreezeAddresses(Tx & tx,
+                               const char * changeAddress, uint64_t changeSats,
+                               const char * ownerChangeAddress, const char * assetName,
+                               const char * const * targetAddresses, size_t count, bool freeze);
+
+/* FREEZE / UNFREEZE ASSET (global): [change], owner-token transfer, global
+ * restriction (no burn). */
+bool assetBuildFreezeAsset(Tx & tx,
+                           const char * changeAddress, uint64_t changeSats,
+                           const char * ownerChangeAddress, const char * assetName, bool freeze);
+
 #endif /* __UNEURAI_ASSETBUILDER_H__R3NU8EN25O */

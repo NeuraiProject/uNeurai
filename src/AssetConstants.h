@@ -54,4 +54,8 @@ size_t assetParentName(const char * assetName, char * out, size_t cap);
 /* Build "ROOT#TAG". Returns length, or 0 on overflow. */
 size_t assetUniqueName(const char * root, const char * tag, char * out, size_t cap);
 
+/* Normalise a restricted-asset verifier string the way the node expects:
+ * strip all whitespace and '#'. Returns length, or 0 on overflow. */
+size_t assetNormalizeVerifier(const char * verifier, char * out, size_t cap);
+
 #endif /* __UNEURAI_ASSETCONSTANTS_H__R3NU8EN25O */

@@ -23,6 +23,7 @@ static uint8_t bufEnc[256];
 #define BASE_TEST "76a9142b5c482167e693950cd303a2806a8cc6c7161db088ac"
 #define BASE_PQ   "51206c24fe896c439911b91bfc74f82c240a94710d08223ba9d60dccf795ef4e6456"
 #define IPFS_HEX  "12209d6c2be50f706953479ab9df2ce3edca90b68053c00b3004b7f0accbe1e8eedf"
+#define ADDR_A    "NXReissueAssetXXXXXXXXXXXXXXWLe4Ao"
 
 // Parse hex into a static buffer; returns the byte length.
 static size_t hx(const char * hex, uint8_t * out, size_t cap) {
@@ -295,6 +296,109 @@ MU_TEST(test_build_invalid_address_fails) {
     mu_assert(!assetBuildTransfer(tx, "not-an-address", "MYTOKEN", 1ULL), "bad address must fail");
 }
 
+/* ── Phase 4: null-asset encode / parse / builders (vs the canonical TS) ──── */
+
+MU_TEST(test_encode_null_tag_legacy) {
+    size_t bl = hx(BASE_MAIN, bufBase, sizeof(bufBase));
+    size_t n = assetEncodeNullTagScript(bufBase, bl, "#KYC", true, bufEnc, sizeof(bufEnc));
+    eqHex(bufEnc, n, "c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60604234b594301", "encode null tag legacy");
+    n = assetEncodeNullTagScript(bufBase, bl, "#KYC", false, bufEnc, sizeof(bufEnc));
+    eqHex(bufEnc, n, "c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60604234b594300", "encode null untag legacy");
+}
+
+MU_TEST(test_encode_null_tag_pq) {
+    size_t bl = hx(BASE_PQ, bufBase, sizeof(bufBase));
+    size_t n = assetEncodeNullTagScript(bufBase, bl, "#KYC", true, bufEnc, sizeof(bufEnc));
+    eqHex(bufEnc, n,
+        "c051206c24fe896c439911b91bfc74f82c240a94710d08223ba9d60dccf795ef4e64560604234b594301",
+        "encode null tag PQ/AuthScript");
+}
+
+MU_TEST(test_encode_freeze_address) {
+    size_t bl = hx(BASE_MAIN, bufBase, sizeof(bufBase));
+    size_t n = assetEncodeNullRestrictionScript(bufBase, bl, "$REST", 1, bufEnc, sizeof(bufEnc));
+    eqHex(bufEnc, n, "c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60705245245535401", "encode freeze address");
+}
+
+MU_TEST(test_encode_verifier_and_global) {
+    size_t n = assetEncodeVerifierScript("KYC&ACC", bufEnc, sizeof(bufEnc));
+    eqHex(bufEnc, n, "c05008074b594326414343", "encode verifier string");
+    n = assetEncodeGlobalRestrictionScript("$REST", 3, bufEnc, sizeof(bufEnc));
+    eqHex(bufEnc, n, "c050500705245245535403", "encode global restriction");
+}
+
+MU_TEST(test_normalize_verifier) {
+    char out[64];
+    size_t n = assetNormalizeVerifier("#KYC & #ACC", out, sizeof(out));
+    mu_assert(n > 0 && strcmp(out, "KYC&ACC") == 0, "normalize strips '#' and whitespace");
+}
+
+MU_TEST(test_parse_null_asset) {
+    AssetInfo info;
+    size_t sl = hx("c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60604234b594301", bufScript, sizeof(bufScript));
+    mu_assert(assetParseScript(bufScript, sl, &info), "parse null tag");
+    mu_assert(info.op == ASSET_NULL_TAG, "null tag op");
+    mu_assert(strcmp(info.name, "#KYC") == 0, "null tag name");
+    mu_assert(info.flag == 1, "null tag flag");
+    mu_assert(info.baseLen == 20, "null tag dest is a 20-byte hash");
+
+    sl = hx("c05008074b594326414343", bufScript, sizeof(bufScript));
+    mu_assert(assetParseScript(bufScript, sl, &info), "parse verifier");
+    mu_assert(info.op == ASSET_VERIFIER, "verifier op");
+    mu_assert(strcmp(info.name, "KYC&ACC") == 0, "verifier string");
+
+    sl = hx("c050500705245245535403", bufScript, sizeof(bufScript));
+    mu_assert(assetParseScript(bufScript, sl, &info), "parse global restriction");
+    mu_assert(info.op == ASSET_GLOBAL_RESTRICTION, "global op");
+    mu_assert(strcmp(info.name, "$REST") == 0, "global name");
+    mu_assert(info.flag == 3, "global flag");
+}
+
+MU_TEST(test_build_issue_restricted) {
+    Tx tx;
+    bool ok = assetBuildIssueRestricted(tx,
+        "NXissueRestrictedXXXXXXXXXXXWpXx4H", assetBurnAmountSats(BURN_ISSUE_RESTRICTED, 1),
+        NULL, 0, ADDR_A, ADDR_A, "$REST", "KYC&ACC", 100000000000ULL, 0, true, NULL, 0);
+    mu_assert(ok, "assetBuildIssueRestricted failed");
+    mu_assert(tx.outputsNumber == 4, "issue restricted must have 4 outputs");
+    checkOut(tx, 0, 300000000000ULL, "76a914818880cfa65a9e036061ed18bad3fd135ef4953c88ac", "ir out0 burn");
+    checkOut(tx, 1, 0ULL, "c05008074b594326414343", "ir out1 verifier");
+    checkOut(tx, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01272766e7405524553542100e1f5050000000075", "ir out2 owner-transfer");
+    checkOut(tx, 3, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01572766e7105245245535400e876481700000000010075", "ir out3 issue");
+}
+
+MU_TEST(test_build_qualifier_tag) {
+    Tx tx;
+    const char * targets[] = { ADDR_A };
+    bool ok = assetBuildQualifierTag(tx,
+        "NXaddTagBurnXXXXXXXXXXXXXXXXWucUTr", assetBurnAmountSats(BURN_TAG_ADDRESS, 1),
+        NULL, 0, ADDR_A, "#KYC", 1ULL, targets, 1, true);
+    mu_assert(ok, "assetBuildQualifierTag failed");
+    mu_assert(tx.outputsNumber == 3, "qualifier tag must have 3 outputs");
+    checkOut(tx, 0, 20000000ULL, "76a9147ff947e92aeaeff3cc873f0939102e9646653e8788ac", "qt out0 burn");
+    checkOut(tx, 1, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01172766e7404234b5943010000000000000075", "qt out1 qualifier transfer");
+    checkOut(tx, 2, 0ULL, "c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60604234b594301", "qt out2 tag");
+}
+
+MU_TEST(test_build_freeze_addresses) {
+    Tx tx;
+    const char * targets[] = { ADDR_A };
+    bool ok = assetBuildFreezeAddresses(tx, NULL, 0, ADDR_A, "$REST", targets, 1, true);
+    mu_assert(ok, "assetBuildFreezeAddresses failed");
+    mu_assert(tx.outputsNumber == 2, "freeze addresses must have 2 outputs");
+    checkOut(tx, 0, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01272766e7405524553542100e1f5050000000075", "fa out0 owner-transfer");
+    checkOut(tx, 1, 0ULL, "c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60705245245535401", "fa out1 restriction");
+}
+
+MU_TEST(test_build_freeze_asset) {
+    Tx tx;
+    bool ok = assetBuildFreezeAsset(tx, NULL, 0, ADDR_A, "$REST", true);
+    mu_assert(ok, "assetBuildFreezeAsset failed");
+    mu_assert(tx.outputsNumber == 2, "freeze asset must have 2 outputs");
+    checkOut(tx, 0, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01272766e7405524553542100e1f5050000000075", "fz out0 owner-transfer");
+    checkOut(tx, 1, 0ULL, "c050500705245245535403", "fz out1 global");
+}
+
 MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_transfer_p2pkh_mainnet);
     MU_RUN_TEST(test_transfer_p2pkh_testnet);
@@ -319,6 +423,16 @@ MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_build_transfer);
     MU_RUN_TEST(test_build_reissue);
     MU_RUN_TEST(test_build_invalid_address_fails);
+    MU_RUN_TEST(test_encode_null_tag_legacy);
+    MU_RUN_TEST(test_encode_null_tag_pq);
+    MU_RUN_TEST(test_encode_freeze_address);
+    MU_RUN_TEST(test_encode_verifier_and_global);
+    MU_RUN_TEST(test_normalize_verifier);
+    MU_RUN_TEST(test_parse_null_asset);
+    MU_RUN_TEST(test_build_issue_restricted);
+    MU_RUN_TEST(test_build_qualifier_tag);
+    MU_RUN_TEST(test_build_freeze_addresses);
+    MU_RUN_TEST(test_build_freeze_asset);
 }
 
 int main(int argc, char *argv[]) {

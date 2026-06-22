@@ -91,3 +91,17 @@ size_t assetUniqueName(const char * root, const char * tag, char * out, size_t c
     out[a + 1 + b] = '\0';
     return a + 1 + b;
 }
+
+size_t assetNormalizeVerifier(const char * verifier, char * out, size_t cap) {
+    if (!verifier || !out || cap == 0) return 0;
+    size_t n = 0;
+    for (const char * p = verifier; *p; ++p) {
+        char c = *p;
+        if (c == '#' || c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v')
+            continue;
+        if (n + 1 >= cap) return 0;   /* leave room for NUL */
+        out[n++] = c;
+    }
+    out[n] = '\0';
+    return n;
+}

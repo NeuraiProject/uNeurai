@@ -126,4 +126,34 @@ size_t assetEncodeReissueScript(const uint8_t * base, size_t baseLen,
                                 const uint8_t * ipfs, size_t ipfsLen,
                                 uint8_t * out, size_t cap);
 
+/* ── Null-asset encoders (phase 4) ───────────────────────────────────────────
+ *
+ * These have no trailing OP_DROP; the destination is embedded as a raw hash:
+ *   address-scoped: OP_XNA_ASSET [OP_1] pushData(hash20|commitment32) pushData(name+flag)
+ *   verifier:       OP_XNA_ASSET OP_RESERVED pushData(serializeString(verifier))
+ *   global:         OP_XNA_ASSET OP_RESERVED OP_RESERVED pushData(name+flag)
+ *
+ * `base` is the destination's standard script (P2PKH 25B or AuthScript 34B); the
+ * 20-byte hash / 32-byte commitment is extracted from it (P2SH is not used for
+ * null-asset destinations, matching the TS encoder).
+ */
+
+/* Qualifier tag / untag (tag => flag 1, untag => flag 0). */
+size_t assetEncodeNullTagScript(const uint8_t * base, size_t baseLen,
+                                const char * qualifierName, bool tag,
+                                uint8_t * out, size_t cap);
+
+/* Address freeze / unfreeze (restricted assets). freezeFlag: 0 unfreeze, 1 freeze. */
+size_t assetEncodeNullRestrictionScript(const uint8_t * base, size_t baseLen,
+                                        const char * assetName, uint8_t freezeFlag,
+                                        uint8_t * out, size_t cap);
+
+/* Verifier string (restricted asset setup). Pass the ALREADY-normalised string
+ * (no whitespace, no '#'); see assetNormalizeVerifier in AssetConstants. */
+size_t assetEncodeVerifierScript(const char * verifierString, uint8_t * out, size_t cap);
+
+/* Global freeze / unfreeze of an asset. freezeFlag: 2 unfreeze, 3 freeze. */
+size_t assetEncodeGlobalRestrictionScript(const char * assetName, uint8_t freezeFlag,
+                                          uint8_t * out, size_t cap);
+
 #endif /* __UNEURAI_ASSET_H__R3NU8EN25O */
