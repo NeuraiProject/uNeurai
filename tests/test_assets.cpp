@@ -2,6 +2,8 @@
 
 #include "minunit.h"
 #include "Asset.h"
+#include "AssetConstants.h"
+#include "AssetBuilder.h"
 #include "Conversion.h"
 #include <string.h>
 
@@ -221,6 +223,78 @@ MU_TEST(test_encode_parse_roundtrip) {
     mu_assert(info.baseLen == bl && memcmp(info.base, bufBase, bl) == 0, "roundtrip base mismatch");
 }
 
+/* ── Phase 3: constants + output builders (vs the canonical TS builders) ──── */
+
+// Compare a built output's amount + scriptPubkey bytes to a golden value.
+static void checkOut(Tx & tx, size_t i, uint64_t amount, const char * scriptHex, const char * msg) {
+    mu_assert(i < tx.outputsNumber, msg);
+    mu_assert(tx.txOuts[i].amount == amount, msg);
+    uint8_t exp[256];
+    size_t el = fromHex(scriptHex, exp, sizeof(exp));
+    mu_assert(tx.txOuts[i].scriptPubkey.scriptLen == el, msg);
+    mu_assert(memcmp(tx.txOuts[i].scriptPubkey.scriptArray, exp, el) == 0, msg);
+}
+
+MU_TEST(test_constants_burn_and_names) {
+    mu_assert(strcmp(assetBurnAddress(BURN_ISSUE_ROOT, false), "NbURNXXXXXXXXXXXXXXXXXXXXXXXT65Gdr") == 0, "mainnet ISSUE_ROOT burn");
+    mu_assert(strcmp(assetBurnAddress(BURN_ISSUE_ROOT, true),  "tBURNXXXXXXXXXXXXXXXXXXXXXXXVZLroy") == 0, "testnet ISSUE_ROOT burn");
+    mu_assert(assetBurnAddress(BURN_OP_COUNT, false) == NULL, "out-of-range op returns NULL");
+    mu_assert(strcmp(assetBurnAddress(BURN_TAG_ADDRESS, true), "tTagBurnXXXXXXXXXXXXXXXXXXXXYm6pxA") == 0, "testnet TAG burn");
+    mu_assert(assetBurnAmountSats(BURN_ISSUE_ROOT, 1) == 100000000000ULL, "ISSUE_ROOT fee");
+    mu_assert(assetBurnAmountSats(BURN_ISSUE_RESTRICTED, 1) == 300000000000ULL, "ISSUE_RESTRICTED fee");
+    mu_assert(assetBurnAmountSats(BURN_TAG_ADDRESS, 3) == 60000000ULL, "TAG fee x3 (0.6 XNA)");
+    mu_assert(assetBurnAmountSats(BURN_ISSUE_UNIQUE, 5) == 5000000000ULL, "UNIQUE fee x5 (50 XNA)");
+
+    char buf[64];
+    mu_assert(assetOwnerTokenName("MYASSET", buf, sizeof(buf)) > 0 && strcmp(buf, "MYASSET!") == 0, "owner name");
+    mu_assert(assetOwnerTokenName("$SECURE", buf, sizeof(buf)) > 0 && strcmp(buf, "SECURE!") == 0, "owner name (restricted strips $)");
+    mu_assert(assetParentName("ROOT/SUB", buf, sizeof(buf)) > 0 && strcmp(buf, "ROOT") == 0, "parent name");
+    mu_assert(assetParentName("ROOT", buf, sizeof(buf)) == 0, "no parent for root");
+    mu_assert(assetUniqueName("ROOT", "tag1", buf, sizeof(buf)) > 0 && strcmp(buf, "ROOT#tag1") == 0, "unique name");
+}
+
+MU_TEST(test_build_issue_root) {
+    Tx tx;
+    bool ok = assetBuildIssue(tx,
+        "NbURNXXXXXXXXXXXXXXXXXXXXXXXT65Gdr", assetBurnAmountSats(BURN_ISSUE_ROOT, 1),
+        "NXReissueAssetXXXXXXXXXXXXXXWLe4Ao", 5000ULL,
+        "NXReissueAssetXXXXXXXXXXXXXXWLe4Ao", "MYASSET",
+        100000000000ULL, 4, true, NULL, 0, NULL);
+    mu_assert(ok, "assetBuildIssue failed");
+    mu_assert(tx.outputsNumber == 4, "issue must produce 4 outputs (burn, change, owner, issue)");
+    checkOut(tx, 0, 100000000000ULL, "76a914aaad0e674ef84b4fa48bd144e780cbc0e5b0d24688ac", "issue out0 burn");
+    checkOut(tx, 1, 5000ULL,         "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688ac", "issue out1 change");
+    checkOut(tx, 2, 0ULL,            "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc00d72766e6f084d5941535345542175", "issue out2 owner");
+    checkOut(tx, 3, 0ULL,            "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01772766e71074d59415353455400e876481700000004010075", "issue out3 issue");
+}
+
+MU_TEST(test_build_transfer) {
+    Tx tx;
+    bool ok = assetBuildTransfer(tx, "NXReissueAssetXXXXXXXXXXXXXXWLe4Ao", "MYTOKEN", 250000000ULL);
+    mu_assert(ok, "assetBuildTransfer failed");
+    mu_assert(tx.outputsNumber == 1, "transfer must produce 1 output");
+    checkOut(tx, 0, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01472766e74074d59544f4b454e80b2e60e0000000075", "transfer out0");
+}
+
+MU_TEST(test_build_reissue) {
+    Tx tx;
+    bool ok = assetBuildReissue(tx,
+        "NXReissueAssetXXXXXXXXXXXXXXWLe4Ao", assetBurnAmountSats(BURN_REISSUE, 1),
+        NULL, 0,
+        "NXReissueAssetXXXXXXXXXXXXXXWLe4Ao", "NXReissueAssetXXXXXXXXXXXXXXWLe4Ao",
+        "MYASSET", 1000000000ULL, 4, false, NULL, 0);
+    mu_assert(ok, "assetBuildReissue failed");
+    mu_assert(tx.outputsNumber == 3, "reissue must produce 3 outputs (burn, owner-transfer, reissue)");
+    checkOut(tx, 0, 20000000000ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688ac", "reissue out0 burn");
+    checkOut(tx, 1, 0ULL,           "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01572766e74084d5941535345542100e1f5050000000075", "reissue out1 owner-transfer");
+    checkOut(tx, 2, 0ULL,           "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01672766e72074d59415353455400ca9a3b00000000040075", "reissue out2 reissue");
+}
+
+MU_TEST(test_build_invalid_address_fails) {
+    Tx tx;
+    mu_assert(!assetBuildTransfer(tx, "not-an-address", "MYTOKEN", 1ULL), "bad address must fail");
+}
+
 MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_transfer_p2pkh_mainnet);
     MU_RUN_TEST(test_transfer_p2pkh_testnet);
@@ -240,6 +314,11 @@ MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_encode_reissue_mainnet);
     MU_RUN_TEST(test_encode_overflow_returns_zero);
     MU_RUN_TEST(test_encode_parse_roundtrip);
+    MU_RUN_TEST(test_constants_burn_and_names);
+    MU_RUN_TEST(test_build_issue_root);
+    MU_RUN_TEST(test_build_transfer);
+    MU_RUN_TEST(test_build_reissue);
+    MU_RUN_TEST(test_build_invalid_address_fails);
 }
 
 int main(int argc, char *argv[]) {
