@@ -113,4 +113,40 @@ bool assetBuildFreezeAsset(Tx & tx,
                            const char * changeAddress, uint64_t changeSats,
                            const char * ownerChangeAddress, const char * assetName, bool freeze);
 
+/* ── More issue variants ─────────────────────────────────────────────────── */
+
+/* ISSUE SUB-ASSET ("PARENT/SUB"): burn, [change], parent-owner transfer,
+ * sub-owner issue, sub issue. `assetName` must contain '/'. `parentOwnerAddress`
+ * / `ownerTokenAddress` may be NULL (default to changeAddress/toAddress). */
+bool assetBuildIssueSub(Tx & tx,
+                        const char * burnAddress, uint64_t burnSats,
+                        const char * changeAddress, uint64_t changeSats,
+                        const char * parentOwnerAddress, const char * ownerTokenAddress,
+                        const char * toAddress, const char * assetName,
+                        uint64_t quantityRaw, uint8_t units, bool reissuable,
+                        const uint8_t * ipfs, size_t ipfsLen);
+
+/* ISSUE UNIQUE (NFTs): burn, [change], root-owner transfer, then one issue
+ * output per tag ("ROOT#tag", qty 1, units 0, non-reissuable). `ipfsArr` /
+ * `ipfsLens` may be NULL (no metadata) or per-tag arrays of length `count`
+ * (a NULL entry => that NFT has no ipfs). */
+bool assetBuildIssueUnique(Tx & tx,
+                           const char * burnAddress, uint64_t burnSats,
+                           const char * changeAddress, uint64_t changeSats,
+                           const char * ownerTokenAddress, const char * toAddress,
+                           const char * rootName,
+                           const char * const * tags, size_t count,
+                           const uint8_t * const * ipfsArr, const size_t * ipfsLens);
+
+/* ISSUE QUALIFIER ("#NAME" or "#ROOT/SUB"): burn, [change], [parent-qualifier
+ * transfer if sub], issue (units 0, non-reissuable). `changeQuantityRaw` is the
+ * parent-qualifier transfer amount (0 => ASSET_OWNER_AMOUNT). */
+bool assetBuildIssueQualifier(Tx & tx,
+                              const char * burnAddress, uint64_t burnSats,
+                              const char * changeAddress, uint64_t changeSats,
+                              const char * rootChangeAddress, const char * toAddress,
+                              const char * assetName, uint64_t quantityRaw,
+                              uint64_t changeQuantityRaw,
+                              const uint8_t * ipfs, size_t ipfsLen);
+
 #endif /* __UNEURAI_ASSETBUILDER_H__R3NU8EN25O */

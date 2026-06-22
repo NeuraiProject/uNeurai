@@ -399,6 +399,58 @@ MU_TEST(test_build_freeze_asset) {
     checkOut(tx, 1, 0ULL, "c050500705245245535403", "fz out1 global");
 }
 
+/* ── Issue variants: sub / unique / qualifier (vs the canonical TS) ───────── */
+
+MU_TEST(test_build_issue_sub) {
+    Tx tx;
+    bool ok = assetBuildIssueSub(tx,
+        "NXissueSubAssetXXXXXXXXXXXXXX6B2JF", assetBurnAmountSats(BURN_ISSUE_SUB, 1),
+        NULL, 0, NULL, NULL, ADDR_A, "ROOT/SUB", 500000000ULL, 2, true, NULL, 0);
+    mu_assert(ok, "assetBuildIssueSub failed");
+    mu_assert(tx.outputsNumber == 4, "issue sub must have 4 outputs");
+    checkOut(tx, 0, 20000000000ULL, "76a914818880cfa7e7cb6cae4b905ba24ada8bd697f73088ac", "sub out0 burn");
+    checkOut(tx, 1, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01272766e7405524f4f542100e1f5050000000075", "sub out1 parent-owner transfer");
+    checkOut(tx, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc00e72766e6f09524f4f542f5355422175", "sub out2 sub-owner issue");
+    checkOut(tx, 3, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01872766e7108524f4f542f5355420065cd1d0000000002010075", "sub out3 issue");
+}
+
+MU_TEST(test_build_issue_unique) {
+    Tx tx;
+    const char * tags[] = { "nft1", "nft2" };
+    bool ok = assetBuildIssueUnique(tx,
+        "NXissueUniqueAssetXXXXXXXXXXUBzP4Z", assetBurnAmountSats(BURN_ISSUE_UNIQUE, 2),
+        NULL, 0, NULL, ADDR_A, "ROOT", tags, 2, NULL, NULL);
+    mu_assert(ok, "assetBuildIssueUnique failed");
+    mu_assert(tx.outputsNumber == 4, "issue unique must have 4 outputs (burn, owner, 2 NFTs)");
+    checkOut(tx, 0, 2000000000ULL, "76a914818880cfaa3bea2940b319fbda08c9e4c5bd831088ac", "unique out0 burn");
+    checkOut(tx, 1, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01272766e7405524f4f542100e1f5050000000075", "unique out1 root-owner transfer");
+    checkOut(tx, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01972766e7109524f4f54236e66743100e1f5050000000000000075", "unique out2 nft1");
+    checkOut(tx, 3, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01972766e7109524f4f54236e66743200e1f5050000000000000075", "unique out3 nft2");
+}
+
+MU_TEST(test_build_issue_qualifier_root) {
+    Tx tx;
+    bool ok = assetBuildIssueQualifier(tx,
+        "NXissueQuaLifierXXXXXXXXXXXXWurNcU", assetBurnAmountSats(BURN_ISSUE_QUALIFIER, 1),
+        NULL, 0, NULL, ADDR_A, "#KYC", 5ULL, 0, NULL, 0);
+    mu_assert(ok, "assetBuildIssueQualifier (root) failed");
+    mu_assert(tx.outputsNumber == 2, "qualifier root must have 2 outputs (burn, issue)");
+    checkOut(tx, 0, 200000000000ULL, "76a914818880cfa56e151bf5ff9dd9011348b56ec13b4a88ac", "qr out0 burn");
+    checkOut(tx, 1, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01472766e7104234b5943050000000000000000000075", "qr out1 issue");
+}
+
+MU_TEST(test_build_issue_qualifier_sub) {
+    Tx tx;
+    bool ok = assetBuildIssueQualifier(tx,
+        "NXissueSubQuaLifierXXXXXXXXXV71vM3", assetBurnAmountSats(BURN_ISSUE_SUB_QUALIFIER, 1),
+        NULL, 0, NULL, ADDR_A, "#KYC/SUB", 3ULL, 100000000ULL, NULL, 0);
+    mu_assert(ok, "assetBuildIssueQualifier (sub) failed");
+    mu_assert(tx.outputsNumber == 3, "qualifier sub must have 3 outputs (burn, parent transfer, issue)");
+    checkOut(tx, 0, 20000000000ULL, "76a914818880cfa7e7d1419e352896d777a01c44a15ab188ac", "qs out0 burn");
+    checkOut(tx, 1, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01172766e7404234b594300e1f5050000000075", "qs out1 parent-qualifier transfer");
+    checkOut(tx, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01872766e7108234b59432f535542030000000000000000000075", "qs out2 issue");
+}
+
 MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_transfer_p2pkh_mainnet);
     MU_RUN_TEST(test_transfer_p2pkh_testnet);
@@ -433,6 +485,10 @@ MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_build_qualifier_tag);
     MU_RUN_TEST(test_build_freeze_addresses);
     MU_RUN_TEST(test_build_freeze_asset);
+    MU_RUN_TEST(test_build_issue_sub);
+    MU_RUN_TEST(test_build_issue_unique);
+    MU_RUN_TEST(test_build_issue_qualifier_root);
+    MU_RUN_TEST(test_build_issue_qualifier_sub);
 }
 
 int main(int argc, char *argv[]) {

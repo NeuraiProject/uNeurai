@@ -223,3 +223,79 @@ bool assetBuildFreezeAsset(Tx & tx,
     if (!assetAddTransferOutput(tx, ownerChangeAddress, ownerName, ASSET_OWNER_AMOUNT)) return false;
     return assetAddGlobalRestrictionOutput(tx, assetName, freeze ? 3 : 2);
 }
+
+/* ── More issue variants ─────────────────────────────────────────────────── */
+
+bool assetBuildIssueSub(Tx & tx,
+                        const char * burnAddress, uint64_t burnSats,
+                        const char * changeAddress, uint64_t changeSats,
+                        const char * parentOwnerAddress, const char * ownerTokenAddress,
+                        const char * toAddress, const char * assetName,
+                        uint64_t quantityRaw, uint8_t units, bool reissuable,
+                        const uint8_t * ipfs, size_t ipfsLen) {
+    char parentName[NEURAI_ASSET_NAME_MAX + 1];
+    if (!assetParentName(assetName, parentName, sizeof(parentName))) return false;  /* needs '/' */
+    if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
+
+    /* move the parent owner token back to ourselves */
+    char parentOwner[NEURAI_ASSET_NAME_MAX + 2];
+    if (!assetOwnerTokenName(parentName, parentOwner, sizeof(parentOwner))) return false;
+    const char * parentAddr = parentOwnerAddress ? parentOwnerAddress
+                                                 : (changeAddress ? changeAddress : toAddress);
+    if (!assetAddTransferOutput(tx, parentAddr, parentOwner, ASSET_OWNER_AMOUNT)) return false;
+
+    /* issue the sub-asset's own owner token */
+    char subOwner[NEURAI_ASSET_NAME_MAX + 2];
+    if (!assetOwnerTokenName(assetName, subOwner, sizeof(subOwner))) return false;
+    if (!assetAddOwnerIssueOutput(tx, ownerTokenAddress ? ownerTokenAddress : toAddress, subOwner))
+        return false;
+
+    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, units, reissuable, ipfs, ipfsLen);
+}
+
+bool assetBuildIssueUnique(Tx & tx,
+                           const char * burnAddress, uint64_t burnSats,
+                           const char * changeAddress, uint64_t changeSats,
+                           const char * ownerTokenAddress, const char * toAddress,
+                           const char * rootName,
+                           const char * const * tags, size_t count,
+                           const uint8_t * const * ipfsArr, const size_t * ipfsLens) {
+    if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
+
+    char rootOwner[NEURAI_ASSET_NAME_MAX + 2];
+    if (!assetOwnerTokenName(rootName, rootOwner, sizeof(rootOwner))) return false;
+    if (!assetAddTransferOutput(tx, ownerTokenAddress ? ownerTokenAddress : toAddress,
+                                rootOwner, ASSET_OWNER_AMOUNT)) return false;
+
+    char uniqueName[NEURAI_ASSET_NAME_MAX + 1];
+    for (size_t i = 0; i < count; ++i) {
+        if (!assetUniqueName(rootName, tags[i], uniqueName, sizeof(uniqueName))) return false;
+        const uint8_t * ip = (ipfsArr && ipfsArr[i]) ? ipfsArr[i] : NULL;
+        size_t il = (ip && ipfsLens) ? ipfsLens[i] : 0;
+        if (!assetAddIssueOutput(tx, toAddress, uniqueName, ASSET_UNIQUE_AMOUNT,
+                                 ASSET_UNIQUE_UNITS, ASSET_UNIQUE_REISSUABLE, ip, il))
+            return false;
+    }
+    return true;
+}
+
+bool assetBuildIssueQualifier(Tx & tx,
+                              const char * burnAddress, uint64_t burnSats,
+                              const char * changeAddress, uint64_t changeSats,
+                              const char * rootChangeAddress, const char * toAddress,
+                              const char * assetName, uint64_t quantityRaw,
+                              uint64_t changeQuantityRaw,
+                              const uint8_t * ipfs, size_t ipfsLen) {
+    if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
+
+    char parentQualifier[NEURAI_ASSET_NAME_MAX + 1];
+    if (assetParentName(assetName, parentQualifier, sizeof(parentQualifier))) {   /* sub-qualifier */
+        const char * pAddr = rootChangeAddress ? rootChangeAddress
+                                               : (changeAddress ? changeAddress : toAddress);
+        uint64_t amt = changeQuantityRaw ? changeQuantityRaw : ASSET_OWNER_AMOUNT;
+        if (!assetAddTransferOutput(tx, pAddr, parentQualifier, amt)) return false;
+    }
+
+    /* qualifiers have no owner token; units 0, non-reissuable */
+    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, 0, false, ipfs, ipfsLen);
+}
