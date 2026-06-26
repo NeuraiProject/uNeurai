@@ -677,6 +677,20 @@ public:
                           uint8_t authType,
                           SigHashType sighash = SIGHASH_ALL) const;
 
+    /** \brief OP_TXHASH digest for an input (Neurai advanced/covenant scripts).
+     *
+     *  Serializes the transaction fields selected by the 8-bit `selector`
+     *  (ascending bit order) and returns their double-SHA256:
+     *      0x01 version(4 LE)              0x10 hash256(all outputs)
+     *      0x02 locktime(4 LE)            0x20 current prevout (txid32||index4 LE)
+     *      0x04 hash256(all prevouts)     0x40 current sequence(4 LE)
+     *      0x08 hash256(all sequences)    0x80 current input index(4 LE)
+     *
+     *  Pure tx serialization + hashing (no key material), so it is available on
+     *  host too — useful for parity tests against neurai-sign-transaction.
+     *  Writes 32 bytes to `out`; returns 32 on success, 0 on error. */
+    int computeOpTxHash(uint8_t selector, uint8_t inputIndex, uint8_t out[32]) const;
+
 #if defined(UNEURAI_ENABLE_PQ) && defined(ARDUINO_ARCH_ESP32)
     /** \brief Sign an AuthScript witness-v1 input with ML-DSA-44 (authType=0x01).
      *         Replaces scriptSig with empty and fills txIns[inputIndex].witness
@@ -694,6 +708,25 @@ public:
                               uint64_t amount,
                               const Script witnessScript,
                               SigHashType sighash = SIGHASH_ALL);
+
+    /** \brief Sign a Neurai covenant CANCEL input with ML-DSA-44 (NOAUTH).
+     *
+     *  Spends an AuthScript-NOAUTH covenant UTXO via its cancel branch
+     *  (OP_TXHASH + OP_CHECKSIGFROMSTACK). The message signed is
+     *  `sha256(computeOpTxHash(txHashSelector, inputIndex))`, and the resulting
+     *  witness stack reveals the covenant script:
+     *      [0x00 NOAUTH], [sig||0x01], [0x05||pqPubKey], [0x01 cancel-branch],
+     *      [covenantScript]
+     *
+     *  `covenantScript` MUST be the exact script the covenant UTXO commits to
+     *  (commitment = buildAuthScriptCommitment(NOAUTH, NULL, 0, covenantScript)).
+     *  `txHashSelector` is the 1-byte OP_TXHASH selector embedded in that script.
+     *  Always uses SIGHASH_ALL. Returns 1 on success, 0 on error. ESP32-only. */
+    int signCovenantCancelInputPQ(uint8_t inputIndex,
+                                  const uint8_t * pqSecretKey,
+                                  const uint8_t * pqPublicKey,
+                                  const Script covenantScript,
+                                  uint8_t txHashSelector);
 #endif
 
 #if 0

@@ -699,6 +699,33 @@ int Tx::hashOutputs(uint8_t h[32]) const{
     return 32;
 }
 
+int Tx::computeOpTxHash(uint8_t selector, uint8_t inputIndex, uint8_t out[32]) const{
+    if(inputIndex >= inputsNumber){ memset(out, 0, 32); return 0; }
+
+    DoubleSha s;
+    s.begin();
+    uint8_t arr[36];
+    uint8_t sub[32];
+
+    /* Concatenate the selected field contributions in ascending bit order,
+     * then double-SHA256 the lot (mirrors neurai-sign-transaction computeOpTxHash). */
+    if(selector & 0x01){ intToLittleEndian(version, arr, 4); s.write(arr, 4); }
+    if(selector & 0x02){ intToLittleEndian(locktime, arr, 4); s.write(arr, 4); }
+    if(selector & 0x04){ hashPrevouts(sub); s.write(sub, 32); }
+    if(selector & 0x08){ hashSequence(sub); s.write(sub, 32); }
+    if(selector & 0x10){ hashOutputs(sub); s.write(sub, 32); }
+    if(selector & 0x20){
+        memcpy(arr, txIns[inputIndex].hash, 32);
+        intToLittleEndian(txIns[inputIndex].outputIndex, arr + 32, 4);
+        s.write(arr, 36);
+    }
+    if(selector & 0x40){ intToLittleEndian(txIns[inputIndex].sequence, arr, 4); s.write(arr, 4); }
+    if(selector & 0x80){ intToLittleEndian((uint64_t)inputIndex, arr, 4); s.write(arr, 4); }
+
+    s.end(out);
+    return 32;
+}
+
 int Tx::sigHashSegwit(uint8_t h[32], uint8_t inputIndex, const Script scriptPubKey, uint64_t amount, SigHashType sighash) const{
     DoubleSha s;
     s.begin();
@@ -920,6 +947,65 @@ int Tx::signAuthScriptInputPQ(uint8_t inputIndex,
     txIns[inputIndex].witness = w;
 
     /* AuthScript spends use an empty scriptSig. */
+    Script empty;
+    txIns[inputIndex].scriptSig = empty;
+
+    return 1;
+}
+
+int Tx::signCovenantCancelInputPQ(uint8_t inputIndex,
+                                  const uint8_t * pqSecretKey,
+                                  const uint8_t * pqPublicKey,
+                                  const Script covenantScript,
+                                  uint8_t txHashSelector){
+    if(pqSecretKey == NULL || pqPublicKey == NULL) return 0;
+    if(inputIndex >= inputsNumber) return 0;
+    if(covenantScript.scriptArray == NULL || covenantScript.scriptLen == 0) return 0;
+
+    /* 1. message = sha256(computeOpTxHash(selector, inputIndex)).
+     *    OP_TXHASH leaves hash256(selected fields) on the stack; the covenant's
+     *    OP_CHECKSIGFROMSTACK applies one more SHA-256 to the message item before
+     *    ML-DSA verification, so we pre-hash exactly once here. */
+    uint8_t opTxHash[32];
+    if(computeOpTxHash(txHashSelector, inputIndex, opTxHash) != 32) return 0;
+    uint8_t message[32];
+    sha256(opTxHash, 32, message);
+
+    /* 2. ML-DSA-44 signature over the 32-byte message. */
+    uint8_t sig[MLDSA44::SIGNATURE_SIZE];
+    size_t siglen = 0;
+    int r = MLDSA44::sign(sig, &siglen, message, 32, pqSecretKey);
+    if(r != 0 || siglen != MLDSA44::SIGNATURE_SIZE) return 0;
+
+    /* 3. NOAUTH covenant-cancel witness stack (push() prepends each varint):
+     *      [0x00 NOAUTH]                  — 1 byte
+     *      [sig || SIGHASH_ALL]           — 2421 bytes
+     *      [0x05 || pqPubKey]             — 1313 bytes
+     *      [0x01]                         — selects the covenant cancel branch
+     *      [covenantScript]               — revealed covenant witnessScript */
+    Witness w;
+
+    uint8_t noAuth = UNEURAI_AUTHTYPE_NOAUTH;
+    w.push(&noAuth, 1);
+
+    uint8_t sigWithType[MLDSA44::SIGNATURE_SIZE + 1];
+    memcpy(sigWithType, sig, siglen);
+    sigWithType[siglen] = (uint8_t)SIGHASH_ALL;
+    w.push(sigWithType, siglen + 1);
+
+    uint8_t serPub[1 + UNEURAI_PQ_PUBKEY_RAW_LEN];
+    serPub[0] = UNEURAI_PQ_PUBKEY_PREFIX;
+    memcpy(serPub + 1, pqPublicKey, UNEURAI_PQ_PUBKEY_RAW_LEN);
+    w.push(serPub, sizeof(serPub));
+
+    uint8_t branch = 0x01;
+    w.push(&branch, 1);
+
+    w.push(covenantScript.scriptArray, covenantScript.scriptLen);
+
+    txIns[inputIndex].witness = w;
+
+    /* Covenant NOAUTH spends use an empty scriptSig. */
     Script empty;
     txIns[inputIndex].scriptSig = empty;
 
