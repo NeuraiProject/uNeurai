@@ -74,6 +74,18 @@ size_t buildAuthScriptScriptPubKey(const uint8_t commitment[32],
                                    uint8_t *out, size_t outLen);
 
 /*
+ * Extract the OP_TXHASH selector from a PQ partial-fill covenant's CANCEL branch.
+ * The branch begins with a fixed prefix:
+ *   OP_IF OP_DUP OP_SHA256 <push32 pubKeyCommitment> OP_EQUALVERIFY <push selector> OP_TXHASH ...
+ * The selector push is either OP_1..OP_16 (values 1..16) or a 1-byte data push.
+ * The device must use the in-script selector (consensus reads it from here), so
+ * never trust a host-supplied value. Writes *outSelector and returns 1 on a
+ * matching script, 0 otherwise.
+ */
+int parseCovenantPQTxHashSelector(const uint8_t *script, size_t len,
+                                  uint8_t *outSelector);
+
+/*
  * Encode a PQ address from a raw 1312-byte ML-DSA-44 public key.
  * Uses witnessScript = OP_TRUE (single byte 0x51) — the phase-1 default.
  * Returns the length of the address written (excluding NUL), or 0 on error.

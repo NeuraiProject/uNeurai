@@ -114,6 +114,31 @@ size_t buildAuthScriptScriptPubKey(const uint8_t commitment[32],
     return 34;
 }
 
+int parseCovenantPQTxHashSelector(const uint8_t *script, size_t len,
+                                  uint8_t *outSelector){
+    if(script == NULL || outSelector == NULL) return 0;
+    /* Fixed cancel-branch prefix: OP_IF OP_DUP OP_SHA256 0x20 <32> OP_EQUALVERIFY. */
+    if(len < 39) return 0;                 /* prefix(37) + at least a 2-byte push */
+    if(script[0]  != 0x63) return 0;       /* OP_IF        */
+    if(script[1]  != 0x76) return 0;       /* OP_DUP       */
+    if(script[2]  != 0xa8) return 0;       /* OP_SHA256    */
+    if(script[3]  != 0x20) return 0;       /* push 32      */
+    if(script[36] != 0x88) return 0;       /* OP_EQUALVERIFY */
+
+    const uint8_t op = script[37];
+    uint8_t sel;
+    if(op >= 0x51 && op <= 0x60){          /* OP_1..OP_16 -> 1..16 */
+        sel = (uint8_t)(op - 0x51 + 1);
+    }else if(op == 0x01){                  /* 1-byte data push */
+        sel = script[38];
+    }else{
+        return 0;
+    }
+    if(sel == 0) return 0;                 /* OP_TXHASH rejects selector 0 */
+    *outSelector = sel;
+    return 1;
+}
+
 /* ---------------------------- PQ address codec ---------------------------- */
 
 size_t pqAddressFromPubKey(const ChainNetworkPQ *net,
