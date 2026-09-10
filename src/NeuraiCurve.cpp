@@ -47,8 +47,15 @@ size_t ECPoint::from_stream(ParseStream *s){
 			uint8_t buf[33];
 			buf[0] = first_byte;
 			memcpy(buf+1, point, 32);
-            uint8_t arr[65];
-            ecdsa_uncompress_pubkey(&secp256k1, buf, arr);
+            uint8_t arr[65] = { 0 };
+            if(!ecdsa_uncompress_pubkey(&secp256k1, buf, arr)){
+                /* x is not on the curve: never keep whatever was in `arr`,
+                 * that could be a valid but unrelated point */
+                memset(point, 0, 64);
+                status = PARSING_FAILED;
+                bytes_parsed += bytes_read;
+                return bytes_read;
+            }
             memcpy(point, arr+1, 64);
 		}
 		status = PARSING_DONE;
