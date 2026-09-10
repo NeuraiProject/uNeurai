@@ -41,7 +41,7 @@ const ChainNetwork NeuraiTest = {
     0x7f, // p2pkh
     0xc4, // p2sh
     "",  // no bech32 prefix in Neurai
-    0x80, // wif
+    0xef, // wif (testnet SECRET_KEY = 239, as in the node chainparams)
     { 0x04, 0x35, 0x83, 0x94 }, // tprv equivalent
     { 0x04, 0x4a, 0x4e, 0x28 }, // uprv equivalent
     { 0x04, 0x5f, 0x18, 0xbc }, // vprv equivalent
@@ -52,7 +52,7 @@ const ChainNetwork NeuraiTest = {
     { 0x04, 0x5f, 0x1c, 0xf6 }, // vpub equivalent
     { 0x02, 0x42, 0x89, 0xef }, // Upub equivalent
     { 0x02, 0x57, 0x54, 0x83 }, // Vpub equivalent
-    0 // bip32 coin type
+    1 // bip32 coin type (SLIP-44 testnet: m/44'/1'/...)
 };
 
 const ChainNetwork * networks[3] = { &Neurai, &NeuraiLegacy, &NeuraiTest };

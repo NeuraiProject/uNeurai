@@ -34,45 +34,47 @@ bool assetAddXnaOutput(Tx & tx, const char * address, uint64_t valueSats) {
 }
 
 bool assetAddTransferOutput(Tx & tx, const char * address,
-                            const char * assetName, uint64_t amountRaw) {
+                            const char * assetName, uint64_t amountRaw,
+                            AssetMarker marker) {
     uint8_t base[64];
     size_t bl = baseFromAddress(address, base, sizeof(base));
     if (!bl) return false;
     uint8_t scr[ASSET_SCRIPT_SCRATCH];
-    size_t n = assetEncodeTransferScript(base, bl, assetName, amountRaw, scr, sizeof(scr));
+    size_t n = assetEncodeTransferScript(base, bl, assetName, amountRaw, scr, sizeof(scr), marker);
     return addScriptOut(tx, 0, scr, n);
 }
 
 bool assetAddIssueOutput(Tx & tx, const char * address, const char * assetName,
                          uint64_t quantityRaw, uint8_t units, bool reissuable,
-                         const uint8_t * ipfs, size_t ipfsLen) {
+                         const uint8_t * ipfs, size_t ipfsLen, AssetMarker marker) {
     uint8_t base[64];
     size_t bl = baseFromAddress(address, base, sizeof(base));
     if (!bl) return false;
     uint8_t scr[ASSET_SCRIPT_SCRATCH];
     size_t n = assetEncodeIssueScript(base, bl, assetName, quantityRaw, units, reissuable,
-                                      ipfs, ipfsLen, scr, sizeof(scr));
+                                      ipfs, ipfsLen, scr, sizeof(scr), marker);
     return addScriptOut(tx, 0, scr, n);
 }
 
-bool assetAddOwnerIssueOutput(Tx & tx, const char * address, const char * ownerName) {
+bool assetAddOwnerIssueOutput(Tx & tx, const char * address, const char * ownerName,
+                              AssetMarker marker) {
     uint8_t base[64];
     size_t bl = baseFromAddress(address, base, sizeof(base));
     if (!bl) return false;
     uint8_t scr[ASSET_SCRIPT_SCRATCH];
-    size_t n = assetEncodeOwnerScript(base, bl, ownerName, scr, sizeof(scr));
+    size_t n = assetEncodeOwnerScript(base, bl, ownerName, scr, sizeof(scr), marker);
     return addScriptOut(tx, 0, scr, n);
 }
 
 bool assetAddReissueOutput(Tx & tx, const char * address, const char * assetName,
                            uint64_t quantityRaw, uint8_t units, bool reissuable,
-                           const uint8_t * ipfs, size_t ipfsLen) {
+                           const uint8_t * ipfs, size_t ipfsLen, AssetMarker marker) {
     uint8_t base[64];
     size_t bl = baseFromAddress(address, base, sizeof(base));
     if (!bl) return false;
     uint8_t scr[ASSET_SCRIPT_SCRATCH];
     size_t n = assetEncodeReissueScript(base, bl, assetName, quantityRaw, units, reissuable,
-                                        ipfs, ipfsLen, scr, sizeof(scr));
+                                        ipfs, ipfsLen, scr, sizeof(scr), marker);
     return addScriptOut(tx, 0, scr, n);
 }
 
@@ -94,15 +96,15 @@ bool assetBuildIssue(Tx & tx,
                      const char * toAddress, const char * assetName,
                      uint64_t quantityRaw, uint8_t units, bool reissuable,
                      const uint8_t * ipfs, size_t ipfsLen,
-                     const char * ownerTokenAddress) {
+                     const char * ownerTokenAddress, AssetMarker marker) {
     if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
 
     char ownerName[NEURAI_ASSET_NAME_MAX + 2];
     if (!assetOwnerTokenName(assetName, ownerName, sizeof(ownerName))) return false;
-    if (!assetAddOwnerIssueOutput(tx, ownerTokenAddress ? ownerTokenAddress : toAddress, ownerName))
+    if (!assetAddOwnerIssueOutput(tx, ownerTokenAddress ? ownerTokenAddress : toAddress, ownerName, marker))
         return false;
 
-    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, units, reissuable, ipfs, ipfsLen);
+    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, units, reissuable, ipfs, ipfsLen, marker);
 }
 
 bool assetBuildReissue(Tx & tx,
@@ -111,21 +113,21 @@ bool assetBuildReissue(Tx & tx,
                        const char * ownerChangeAddress, const char * toAddress,
                        const char * assetName, uint64_t quantityRaw,
                        uint8_t units, bool reissuable,
-                       const uint8_t * ipfs, size_t ipfsLen) {
+                       const uint8_t * ipfs, size_t ipfsLen, AssetMarker marker) {
     if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
 
     char ownerName[NEURAI_ASSET_NAME_MAX + 2];
     if (!assetOwnerTokenName(assetName, ownerName, sizeof(ownerName))) return false;
     /* The owner token is moved back to ourselves as a transfer of OWNER amount. */
-    if (!assetAddTransferOutput(tx, ownerChangeAddress, ownerName, ASSET_OWNER_AMOUNT))
+    if (!assetAddTransferOutput(tx, ownerChangeAddress, ownerName, ASSET_OWNER_AMOUNT, marker))
         return false;
 
-    return assetAddReissueOutput(tx, toAddress, assetName, quantityRaw, units, reissuable, ipfs, ipfsLen);
+    return assetAddReissueOutput(tx, toAddress, assetName, quantityRaw, units, reissuable, ipfs, ipfsLen, marker);
 }
 
 bool assetBuildTransfer(Tx & tx, const char * toAddress,
-                        const char * assetName, uint64_t amountRaw) {
-    return assetAddTransferOutput(tx, toAddress, assetName, amountRaw);
+                        const char * assetName, uint64_t amountRaw, AssetMarker marker) {
+    return assetAddTransferOutput(tx, toAddress, assetName, amountRaw, marker);
 }
 
 /* ── Null-asset single outputs ───────────────────────────────────────────── */
@@ -172,16 +174,16 @@ bool assetBuildIssueRestricted(Tx & tx,
                                const char * ownerChangeAddress, const char * toAddress,
                                const char * assetName, const char * verifierString,
                                uint64_t quantityRaw, uint8_t units, bool reissuable,
-                               const uint8_t * ipfs, size_t ipfsLen) {
+                               const uint8_t * ipfs, size_t ipfsLen, AssetMarker marker) {
     if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
     if (!assetAddVerifierOutput(tx, verifierString)) return false;
 
     char ownerName[NEURAI_ASSET_NAME_MAX + 2];
     if (!assetOwnerTokenName(assetName, ownerName, sizeof(ownerName))) return false;
     if (!assetAddTransferOutput(tx, ownerChangeAddress ? ownerChangeAddress : toAddress,
-                                ownerName, ASSET_OWNER_AMOUNT)) return false;
+                                ownerName, ASSET_OWNER_AMOUNT, marker)) return false;
 
-    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, units, reissuable, ipfs, ipfsLen);
+    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, units, reissuable, ipfs, ipfsLen, marker);
 }
 
 bool assetBuildQualifierTag(Tx & tx,
@@ -189,9 +191,10 @@ bool assetBuildQualifierTag(Tx & tx,
                             const char * changeAddress, uint64_t changeSats,
                             const char * qualifierChangeAddress, const char * qualifierName,
                             uint64_t qualifierChangeAmountRaw,
-                            const char * const * targetAddresses, size_t count, bool tag) {
+                            const char * const * targetAddresses, size_t count, bool tag,
+                            AssetMarker marker) {
     if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
-    if (!assetAddTransferOutput(tx, qualifierChangeAddress, qualifierName, qualifierChangeAmountRaw))
+    if (!assetAddTransferOutput(tx, qualifierChangeAddress, qualifierName, qualifierChangeAmountRaw, marker))
         return false;
     for (size_t i = 0; i < count; ++i) {
         if (!assetAddNullTagOutput(tx, targetAddresses[i], qualifierName, tag)) return false;
@@ -202,11 +205,12 @@ bool assetBuildQualifierTag(Tx & tx,
 bool assetBuildFreezeAddresses(Tx & tx,
                                const char * changeAddress, uint64_t changeSats,
                                const char * ownerChangeAddress, const char * assetName,
-                               const char * const * targetAddresses, size_t count, bool freeze) {
+                               const char * const * targetAddresses, size_t count, bool freeze,
+                               AssetMarker marker) {
     if (!addEnvelope(tx, NULL, 0, changeAddress, changeSats)) return false;   /* no burn */
     char ownerName[NEURAI_ASSET_NAME_MAX + 2];
     if (!assetOwnerTokenName(assetName, ownerName, sizeof(ownerName))) return false;
-    if (!assetAddTransferOutput(tx, ownerChangeAddress, ownerName, ASSET_OWNER_AMOUNT)) return false;
+    if (!assetAddTransferOutput(tx, ownerChangeAddress, ownerName, ASSET_OWNER_AMOUNT, marker)) return false;
     for (size_t i = 0; i < count; ++i) {
         if (!assetAddNullRestrictionOutput(tx, targetAddresses[i], assetName, freeze ? 1 : 0))
             return false;
@@ -216,11 +220,12 @@ bool assetBuildFreezeAddresses(Tx & tx,
 
 bool assetBuildFreezeAsset(Tx & tx,
                            const char * changeAddress, uint64_t changeSats,
-                           const char * ownerChangeAddress, const char * assetName, bool freeze) {
+                           const char * ownerChangeAddress, const char * assetName, bool freeze,
+                           AssetMarker marker) {
     if (!addEnvelope(tx, NULL, 0, changeAddress, changeSats)) return false;   /* no burn */
     char ownerName[NEURAI_ASSET_NAME_MAX + 2];
     if (!assetOwnerTokenName(assetName, ownerName, sizeof(ownerName))) return false;
-    if (!assetAddTransferOutput(tx, ownerChangeAddress, ownerName, ASSET_OWNER_AMOUNT)) return false;
+    if (!assetAddTransferOutput(tx, ownerChangeAddress, ownerName, ASSET_OWNER_AMOUNT, marker)) return false;
     return assetAddGlobalRestrictionOutput(tx, assetName, freeze ? 3 : 2);
 }
 
@@ -232,7 +237,7 @@ bool assetBuildIssueSub(Tx & tx,
                         const char * parentOwnerAddress, const char * ownerTokenAddress,
                         const char * toAddress, const char * assetName,
                         uint64_t quantityRaw, uint8_t units, bool reissuable,
-                        const uint8_t * ipfs, size_t ipfsLen) {
+                        const uint8_t * ipfs, size_t ipfsLen, AssetMarker marker) {
     char parentName[NEURAI_ASSET_NAME_MAX + 1];
     if (!assetParentName(assetName, parentName, sizeof(parentName))) return false;  /* needs '/' */
     if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
@@ -242,15 +247,15 @@ bool assetBuildIssueSub(Tx & tx,
     if (!assetOwnerTokenName(parentName, parentOwner, sizeof(parentOwner))) return false;
     const char * parentAddr = parentOwnerAddress ? parentOwnerAddress
                                                  : (changeAddress ? changeAddress : toAddress);
-    if (!assetAddTransferOutput(tx, parentAddr, parentOwner, ASSET_OWNER_AMOUNT)) return false;
+    if (!assetAddTransferOutput(tx, parentAddr, parentOwner, ASSET_OWNER_AMOUNT, marker)) return false;
 
     /* issue the sub-asset's own owner token */
     char subOwner[NEURAI_ASSET_NAME_MAX + 2];
     if (!assetOwnerTokenName(assetName, subOwner, sizeof(subOwner))) return false;
-    if (!assetAddOwnerIssueOutput(tx, ownerTokenAddress ? ownerTokenAddress : toAddress, subOwner))
+    if (!assetAddOwnerIssueOutput(tx, ownerTokenAddress ? ownerTokenAddress : toAddress, subOwner, marker))
         return false;
 
-    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, units, reissuable, ipfs, ipfsLen);
+    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, units, reissuable, ipfs, ipfsLen, marker);
 }
 
 bool assetBuildIssueUnique(Tx & tx,
@@ -259,13 +264,14 @@ bool assetBuildIssueUnique(Tx & tx,
                            const char * ownerTokenAddress, const char * toAddress,
                            const char * rootName,
                            const char * const * tags, size_t count,
-                           const uint8_t * const * ipfsArr, const size_t * ipfsLens) {
+                           const uint8_t * const * ipfsArr, const size_t * ipfsLens,
+                           AssetMarker marker) {
     if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
 
     char rootOwner[NEURAI_ASSET_NAME_MAX + 2];
     if (!assetOwnerTokenName(rootName, rootOwner, sizeof(rootOwner))) return false;
     if (!assetAddTransferOutput(tx, ownerTokenAddress ? ownerTokenAddress : toAddress,
-                                rootOwner, ASSET_OWNER_AMOUNT)) return false;
+                                rootOwner, ASSET_OWNER_AMOUNT, marker)) return false;
 
     char uniqueName[NEURAI_ASSET_NAME_MAX + 1];
     for (size_t i = 0; i < count; ++i) {
@@ -273,7 +279,7 @@ bool assetBuildIssueUnique(Tx & tx,
         const uint8_t * ip = (ipfsArr && ipfsArr[i]) ? ipfsArr[i] : NULL;
         size_t il = (ip && ipfsLens) ? ipfsLens[i] : 0;
         if (!assetAddIssueOutput(tx, toAddress, uniqueName, ASSET_UNIQUE_AMOUNT,
-                                 ASSET_UNIQUE_UNITS, ASSET_UNIQUE_REISSUABLE, ip, il))
+                                 ASSET_UNIQUE_UNITS, ASSET_UNIQUE_REISSUABLE, ip, il, marker))
             return false;
     }
     return true;
@@ -285,7 +291,7 @@ bool assetBuildIssueQualifier(Tx & tx,
                               const char * rootChangeAddress, const char * toAddress,
                               const char * assetName, uint64_t quantityRaw,
                               uint64_t changeQuantityRaw,
-                              const uint8_t * ipfs, size_t ipfsLen) {
+                              const uint8_t * ipfs, size_t ipfsLen, AssetMarker marker) {
     if (!addEnvelope(tx, burnAddress, burnSats, changeAddress, changeSats)) return false;
 
     char parentQualifier[NEURAI_ASSET_NAME_MAX + 1];
@@ -293,9 +299,9 @@ bool assetBuildIssueQualifier(Tx & tx,
         const char * pAddr = rootChangeAddress ? rootChangeAddress
                                                : (changeAddress ? changeAddress : toAddress);
         uint64_t amt = changeQuantityRaw ? changeQuantityRaw : ASSET_OWNER_AMOUNT;
-        if (!assetAddTransferOutput(tx, pAddr, parentQualifier, amt)) return false;
+        if (!assetAddTransferOutput(tx, pAddr, parentQualifier, amt, marker)) return false;
     }
 
     /* qualifiers have no owner token; units 0, non-reissuable */
-    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, 0, false, ipfs, ipfsLen);
+    return assetAddIssueOutput(tx, toAddress, assetName, quantityRaw, 0, false, ipfs, ipfsLen, marker);
 }

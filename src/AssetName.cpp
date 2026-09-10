@@ -178,7 +178,11 @@ AssetNameType assetDetectAndValidate(const char * name, bool testnet) {
     size_t n = strlen(name);
     if (n == 0) return ASSET_NAME_INVALID;
 
-    const size_t fullMax    = testnet ? 121 : 32;
+    /* Full-name caps, mirror of the node (assets_fromscript.cpp
+     * MAX_NAME_LENGTH 31 / MAX_NAME_LENGTH_TESTNET 121): the limit applies to
+     * the COMPLETE name (owner '!' and tags included), so root/sub names are
+     * capped one lower — their owner token "NAME!" must still fit. */
+    const size_t fullMax    = testnet ? 121 : 31;
     const size_t rootSubMax = fullMax - 1;
 
     if (name[n - 1] == '!')

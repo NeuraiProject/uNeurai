@@ -23,7 +23,7 @@ Telegram group: https://t.me/neuraiproject
 
  - **Neurai**: (Default) The mainnet network. Uses BIP-44 coin type `1900`.
  - **NeuraiLegacy**: Mainnet network using BIP-44 coin type `0`. Compatible with legacy wallet implementations.
- - **NeuraiTest**: The testnet network.
+ - **NeuraiTest**: The testnet network. Uses BIP-44 coin type `1` and WIF prefix `0xef`, as the node does.
 
  Post-Quantum networks (only present when built with `-DUNEURAI_ENABLE_PQ`):
 
@@ -214,7 +214,48 @@ allocation-free:
   whole asset.
 - **`AssetName.h`** — `assetDetectAndValidate()` validates an asset name and
   reports its type (root / sub / unique / qualifier / restricted / depin / owner)
-  following the Neurai naming rules and per-network length limits.
+  following the Neurai naming rules and per-network length limits (full name
+  31 chars on Mainnet / 121 on Testnet; root and sub names one less so the
+  owner token `NAME!` still fits — the same caps the node enforces).
+
+### NIP-040: the `rvn` / `xna` asset marker
+
+Every transfer / issue / owner / reissue payload starts with a 3-byte marker.
+Historically it is `rvn` (inherited from Ravencoin); NIP-040 migrates it to
+`xna`. From the activation height the node **rejects** new outputs that still
+carry `rvn` (`bad-txns-legacy-asset-marker-after-nip040`), while legacy `rvn`
+UTXOs remain valid and spendable. Status today:
+
+| Network | Marker for new outputs |
+| --- | --- |
+| Mainnet | `rvn` (no activation height scheduled yet) |
+| Testnet | `xna` (active since block 303000) |
+
+uNeurai therefore exposes the marker explicitly instead of guessing it from the
+network — exactly like `@neuraiproject/neurai-create-transaction`:
+
+- `assetParseScript()` accepts **both** markers and reports the one it found in
+  `AssetInfo.marker` (`ASSET_MARKER_RVN` / `ASSET_MARKER_XNA`).
+- Every encoder and builder that emits a marker takes a trailing
+  `AssetMarker marker` argument, defaulting to `ASSET_MARKER_RVN`. Pass the
+  value the node reports in `getblockchaininfo.asset_marker` for the next block
+  (the host sends it to the device); when building offline, pass the marker you
+  know to be right for the target chain.
+- Null-asset outputs (qualifier tag / untag, address or global freeze,
+  verifier) carry no marker bytes and are unaffected.
+
+```cpp
+// Testnet today: the node reports asset_marker "xna"
+assetBuildTransfer(tx, "tAddress...", "MYTOKEN", 250000000ULL, ASSET_MARKER_XNA);
+
+// Mainnet today: "rvn" (the default, so both of these are equivalent)
+assetBuildTransfer(tx, "Naddress...", "MYTOKEN", 250000000ULL);
+assetBuildTransfer(tx, "Naddress...", "MYTOKEN", 250000000ULL, ASSET_MARKER_RVN);
+
+// Low-level: the 4-byte payload prefix for a given marker / op
+uint8_t pfx[4];
+assetMarkerPrefix(ASSET_MARKER_XNA, ASSET_ISSUE, pfx);   // "xnaq"
+```
 
 ```cpp
 #include "AssetBuilder.h"   // pulls in Asset.h + AssetConstants.h
@@ -233,6 +274,7 @@ AssetInfo info;
 const Script& spk = tx.txOuts[0].scriptPubkey;
 if (assetParseScript(spk.scriptArray, spk.scriptLen, &info)) {
     // info.op == ASSET_TRANSFER, info.name == "MYTOKEN", info.amount == 250000000
+    // info.marker == ASSET_MARKER_RVN or ASSET_MARKER_XNA (NIP-040, see below)
 }
 ```
 

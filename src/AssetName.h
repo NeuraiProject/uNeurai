@@ -11,8 +11,10 @@
  * no allocation. Use it to pre-validate names before building an asset tx (the
  * node remains authoritative).
  *
- * Length caps: Mainnet 32 / Testnet 121 (root & sub are one less). DEPIN ('&')
- * is testnet-only. Reserved: XNA / NEURAI / NEURAICOIN (and their '#' forms).
+ * Length caps (node assets_fromscript.cpp): Mainnet 31 / Testnet 121 for the
+ * complete name; root & sub are one less (30 / 120) so "NAME!" still fits.
+ * DEPIN ('&') is testnet-only. Reserved: XNA / NEURAI / NEURAICOIN (and their
+ * '#' forms).
  */
 
 enum AssetNameType {

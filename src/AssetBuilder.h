@@ -17,6 +17,13 @@
  * Every function returns true on success and false on a bad address / encode
  * overflow (in which case the partially-built tx should be discarded).
  * `ipfs`/`ipfsLen` is the already-encoded 34-byte data reference, or NULL/0.
+ *
+ * NIP-040: every function that emits a transfer / issue / owner / reissue
+ * output takes a trailing `marker` (ASSET_MARKER_RVN | ASSET_MARKER_XNA) that
+ * selects the payload marker. It defaults to ASSET_MARKER_RVN, like
+ * neurai-create-transaction; pass the value the node reports in
+ * `getblockchaininfo.asset_marker` (today: "rvn" on mainnet, "xna" on testnet).
+ * Null-asset outputs (tag / freeze / verifier / global) carry no marker.
  */
 
 /* ── Single outputs (append one TxOut to `tx`) ───────────────────────────── */
@@ -24,22 +31,26 @@
 /* Plain XNA payment / burn / change. */
 bool assetAddXnaOutput(Tx & tx, const char * address, uint64_t valueSats);
 
-/* Asset transfer (rvnt), value 0. */
+/* Asset transfer (<marker>t), value 0. */
 bool assetAddTransferOutput(Tx & tx, const char * address,
-                            const char * assetName, uint64_t amountRaw);
+                            const char * assetName, uint64_t amountRaw,
+                            AssetMarker marker = ASSET_MARKER_DEFAULT);
 
-/* New-asset issue (rvnq), value 0. */
+/* New-asset issue (<marker>q), value 0. */
 bool assetAddIssueOutput(Tx & tx, const char * address, const char * assetName,
                          uint64_t quantityRaw, uint8_t units, bool reissuable,
-                         const uint8_t * ipfs, size_t ipfsLen);
+                         const uint8_t * ipfs, size_t ipfsLen,
+                         AssetMarker marker = ASSET_MARKER_DEFAULT);
 
-/* Owner token issue (rvno), value 0. */
-bool assetAddOwnerIssueOutput(Tx & tx, const char * address, const char * ownerName);
+/* Owner token issue (<marker>o), value 0. */
+bool assetAddOwnerIssueOutput(Tx & tx, const char * address, const char * ownerName,
+                              AssetMarker marker = ASSET_MARKER_DEFAULT);
 
-/* Reissue (rvnr), value 0. */
+/* Reissue (<marker>r), value 0. */
 bool assetAddReissueOutput(Tx & tx, const char * address, const char * assetName,
                            uint64_t quantityRaw, uint8_t units, bool reissuable,
-                           const uint8_t * ipfs, size_t ipfsLen);
+                           const uint8_t * ipfs, size_t ipfsLen,
+                           AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* ── Full operations (append the whole ordered output set) ───────────────── */
 
@@ -52,7 +63,8 @@ bool assetBuildIssue(Tx & tx,
                      const char * toAddress, const char * assetName,
                      uint64_t quantityRaw, uint8_t units, bool reissuable,
                      const uint8_t * ipfs, size_t ipfsLen,
-                     const char * ownerTokenAddress);
+                     const char * ownerTokenAddress,
+                     AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* REISSUE: burn, [change], owner-token transfer, reissue. */
 bool assetBuildReissue(Tx & tx,
@@ -61,11 +73,13 @@ bool assetBuildReissue(Tx & tx,
                        const char * ownerChangeAddress, const char * toAddress,
                        const char * assetName, uint64_t quantityRaw,
                        uint8_t units, bool reissuable,
-                       const uint8_t * ipfs, size_t ipfsLen);
+                       const uint8_t * ipfs, size_t ipfsLen,
+                       AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* Plain asset transfer (one transfer output). */
 bool assetBuildTransfer(Tx & tx, const char * toAddress,
-                        const char * assetName, uint64_t amountRaw);
+                        const char * assetName, uint64_t amountRaw,
+                        AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* ── Null-asset single outputs (phase 4) ─────────────────────────────────── */
 
@@ -89,7 +103,8 @@ bool assetBuildIssueRestricted(Tx & tx,
                                const char * ownerChangeAddress, const char * toAddress,
                                const char * assetName, const char * verifierString,
                                uint64_t quantityRaw, uint8_t units, bool reissuable,
-                               const uint8_t * ipfs, size_t ipfsLen);
+                               const uint8_t * ipfs, size_t ipfsLen,
+                               AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* QUALIFIER TAG / UNTAG: burn, [change], qualifier transfer, one tag output per
  * target address. `targetAddresses` is an array of `count` C-strings. */
@@ -98,20 +113,23 @@ bool assetBuildQualifierTag(Tx & tx,
                             const char * changeAddress, uint64_t changeSats,
                             const char * qualifierChangeAddress, const char * qualifierName,
                             uint64_t qualifierChangeAmountRaw,
-                            const char * const * targetAddresses, size_t count, bool tag);
+                            const char * const * targetAddresses, size_t count, bool tag,
+                            AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* FREEZE / UNFREEZE ADDRESSES: [change], owner-token transfer, one restriction
  * output per target address (no burn). */
 bool assetBuildFreezeAddresses(Tx & tx,
                                const char * changeAddress, uint64_t changeSats,
                                const char * ownerChangeAddress, const char * assetName,
-                               const char * const * targetAddresses, size_t count, bool freeze);
+                               const char * const * targetAddresses, size_t count, bool freeze,
+                               AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* FREEZE / UNFREEZE ASSET (global): [change], owner-token transfer, global
  * restriction (no burn). */
 bool assetBuildFreezeAsset(Tx & tx,
                            const char * changeAddress, uint64_t changeSats,
-                           const char * ownerChangeAddress, const char * assetName, bool freeze);
+                           const char * ownerChangeAddress, const char * assetName, bool freeze,
+                           AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* ── More issue variants ─────────────────────────────────────────────────── */
 
@@ -124,7 +142,8 @@ bool assetBuildIssueSub(Tx & tx,
                         const char * parentOwnerAddress, const char * ownerTokenAddress,
                         const char * toAddress, const char * assetName,
                         uint64_t quantityRaw, uint8_t units, bool reissuable,
-                        const uint8_t * ipfs, size_t ipfsLen);
+                        const uint8_t * ipfs, size_t ipfsLen,
+                        AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* ISSUE UNIQUE (NFTs): burn, [change], root-owner transfer, then one issue
  * output per tag ("ROOT#tag", qty 1, units 0, non-reissuable). `ipfsArr` /
@@ -136,7 +155,8 @@ bool assetBuildIssueUnique(Tx & tx,
                            const char * ownerTokenAddress, const char * toAddress,
                            const char * rootName,
                            const char * const * tags, size_t count,
-                           const uint8_t * const * ipfsArr, const size_t * ipfsLens);
+                           const uint8_t * const * ipfsArr, const size_t * ipfsLens,
+                           AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 /* ISSUE QUALIFIER ("#NAME" or "#ROOT/SUB"): burn, [change], [parent-qualifier
  * transfer if sub], issue (units 0, non-reissuable). `changeQuantityRaw` is the
@@ -147,6 +167,7 @@ bool assetBuildIssueQualifier(Tx & tx,
                               const char * rootChangeAddress, const char * toAddress,
                               const char * assetName, uint64_t quantityRaw,
                               uint64_t changeQuantityRaw,
-                              const uint8_t * ipfs, size_t ipfsLen);
+                              const uint8_t * ipfs, size_t ipfsLen,
+                              AssetMarker marker = ASSET_MARKER_DEFAULT);
 
 #endif /* __UNEURAI_ASSETBUILDER_H__R3NU8EN25O */

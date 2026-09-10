@@ -8,6 +8,63 @@ const uint8_t XNA_ISSUE_PREFIX[4]    = { 0x72, 0x76, 0x6e, 0x71 }; /* "rvnq" */
 const uint8_t XNA_OWNER_PREFIX[4]    = { 0x72, 0x76, 0x6e, 0x6f }; /* "rvno" */
 const uint8_t XNA_REISSUE_PREFIX[4]  = { 0x72, 0x76, 0x6e, 0x72 }; /* "rvnr" */
 
+/* ── NIP-040 marker ─────────────────────────────────────────────────────────
+ * The only place marker bytes are assembled / recognised (mirror of the node's
+ * AppendAssetMarkerPrefix and of neurai-create-transaction assetPayloadPrefix). */
+static const uint8_t MARKER_RVN[3] = { 0x72, 0x76, 0x6e }; /* "rvn" */
+static const uint8_t MARKER_XNA[3] = { 0x78, 0x6e, 0x61 }; /* "xna" */
+
+const uint8_t * assetMarkerBytes(AssetMarker marker) {
+    switch (marker) {
+        case ASSET_MARKER_RVN: return MARKER_RVN;
+        case ASSET_MARKER_XNA: return MARKER_XNA;
+    }
+    return NULL;
+}
+
+const char * assetMarkerName(AssetMarker marker) {
+    switch (marker) {
+        case ASSET_MARKER_RVN: return "rvn";
+        case ASSET_MARKER_XNA: return "xna";
+    }
+    return NULL;
+}
+
+/* Op letter shared by both markers: t / q / o / r. 0 for non-standard ops. */
+static uint8_t opLetter(AssetOp op) {
+    switch (op) {
+        case ASSET_TRANSFER: return 0x74; /* 't' */
+        case ASSET_ISSUE:    return 0x71; /* 'q' */
+        case ASSET_OWNER:    return 0x6f; /* 'o' */
+        case ASSET_REISSUE:  return 0x72; /* 'r' */
+        default:             return 0;
+    }
+}
+
+size_t assetMarkerPrefix(AssetMarker marker, AssetOp op, uint8_t out[4]) {
+    const uint8_t * m = assetMarkerBytes(marker);
+    uint8_t letter = opLetter(op);
+    if (!m || !letter || !out) return 0;
+    memcpy(out, m, 3);
+    out[3] = letter;
+    return 4;
+}
+
+/* Recognise "<marker><letter>" at the start of a payload. Both markers are
+ * accepted: legacy "rvn" history stays valid and spendable after NIP-040. */
+static bool classifyPrefix(const uint8_t * p, AssetMarker * marker, AssetOp * op) {
+    if      (memcmp(p, MARKER_RVN, 3) == 0) *marker = ASSET_MARKER_RVN;
+    else if (memcmp(p, MARKER_XNA, 3) == 0) *marker = ASSET_MARKER_XNA;
+    else return false;
+    switch (p[3]) {
+        case 0x74: *op = ASSET_TRANSFER; return true;
+        case 0x71: *op = ASSET_ISSUE;    return true;
+        case 0x6f: *op = ASSET_OWNER;    return true;
+        case 0x72: *op = ASSET_REISSUE;  return true;
+    }
+    return false;
+}
+
 /* ── Low-level readers ──────────────────────────────────────────────────────
  * All bounds-checked; they never read past `len`. Offsets are absolute into the
  * original script buffer so AssetInfo.base/ipfs can point straight into it.
@@ -84,6 +141,7 @@ static size_t leadingBaseLen(const uint8_t * s, size_t len) {
 
 static void resetInfo(AssetInfo * info) {
     info->op = ASSET_NONE;
+    info->marker = ASSET_MARKER_RVN;
     info->base = NULL;     info->baseLen = 0;
     info->name[0] = '\0';  info->nameLen = 0;
     info->amount = 0;
@@ -95,11 +153,7 @@ static void resetInfo(AssetInfo * info) {
 /* Classify + parse a standard payload (4-byte tag + fields). */
 static bool parsePayload(const uint8_t * p, size_t plen, AssetInfo * info) {
     if (plen < 4) return false;
-    if      (memcmp(p, XNA_TRANSFER_PREFIX, 4) == 0) info->op = ASSET_TRANSFER;
-    else if (memcmp(p, XNA_ISSUE_PREFIX,    4) == 0) info->op = ASSET_ISSUE;
-    else if (memcmp(p, XNA_OWNER_PREFIX,    4) == 0) info->op = ASSET_OWNER;
-    else if (memcmp(p, XNA_REISSUE_PREFIX,  4) == 0) info->op = ASSET_REISSUE;
-    else return false;
+    if (!classifyPrefix(p, &info->marker, &info->op)) return false;
 
     size_t off = 4;
     if (!readVarStr(p, plen, off, info->name, sizeof(info->name), &info->nameLen, &off))
@@ -243,10 +297,17 @@ static void bu64le(Buf * b, uint64_t v) {
     bputn(b, tmp, 8);
 }
 
+/* Append <marker><letter>; marks the buffer failed on a bad marker/op. */
+static void bprefix(Buf * b, AssetMarker marker, AssetOp op) {
+    uint8_t pfx[4];
+    if (assetMarkerPrefix(marker, op, pfx) != 4) { b->ok = false; return; }
+    bputn(b, pfx, 4);
+}
+
 size_t assetEncodeTransferPayload(const char * name, uint64_t amountRaw,
-                                  uint8_t * out, size_t cap) {
+                                  uint8_t * out, size_t cap, AssetMarker marker) {
     Buf b = { out, cap, 0, true };
-    bputn(&b, XNA_TRANSFER_PREFIX, 4);
+    bprefix(&b, marker, ASSET_TRANSFER);
     bvarstr(&b, name);
     bu64le(&b, amountRaw);
     return b.ok ? b.len : 0;
@@ -255,9 +316,9 @@ size_t assetEncodeTransferPayload(const char * name, uint64_t amountRaw,
 size_t assetEncodeIssuePayload(const char * name, uint64_t quantityRaw,
                                uint8_t units, bool reissuable,
                                const uint8_t * ipfs, size_t ipfsLen,
-                               uint8_t * out, size_t cap) {
+                               uint8_t * out, size_t cap, AssetMarker marker) {
     Buf b = { out, cap, 0, true };
-    bputn(&b, XNA_ISSUE_PREFIX, 4);
+    bprefix(&b, marker, ASSET_ISSUE);
     bvarstr(&b, name);
     bu64le(&b, quantityRaw);
     bput(&b, units);
@@ -267,9 +328,10 @@ size_t assetEncodeIssuePayload(const char * name, uint64_t quantityRaw,
     return b.ok ? b.len : 0;
 }
 
-size_t assetEncodeOwnerPayload(const char * ownerName, uint8_t * out, size_t cap) {
+size_t assetEncodeOwnerPayload(const char * ownerName, uint8_t * out, size_t cap,
+                               AssetMarker marker) {
     Buf b = { out, cap, 0, true };
-    bputn(&b, XNA_OWNER_PREFIX, 4);
+    bprefix(&b, marker, ASSET_OWNER);
     bvarstr(&b, ownerName);
     return b.ok ? b.len : 0;
 }
@@ -277,9 +339,9 @@ size_t assetEncodeOwnerPayload(const char * ownerName, uint8_t * out, size_t cap
 size_t assetEncodeReissuePayload(const char * name, uint64_t quantityRaw,
                                  uint8_t units, bool reissuable,
                                  const uint8_t * ipfs, size_t ipfsLen,
-                                 uint8_t * out, size_t cap) {
+                                 uint8_t * out, size_t cap, AssetMarker marker) {
     Buf b = { out, cap, 0, true };
-    bputn(&b, XNA_REISSUE_PREFIX, 4);
+    bprefix(&b, marker, ASSET_REISSUE);
     bvarstr(&b, name);
     bu64le(&b, quantityRaw);
     bput(&b, units);
@@ -306,9 +368,9 @@ size_t assetWrapScript(const uint8_t * base, size_t baseLen,
 
 size_t assetEncodeTransferScript(const uint8_t * base, size_t baseLen,
                                  const char * name, uint64_t amountRaw,
-                                 uint8_t * out, size_t cap) {
+                                 uint8_t * out, size_t cap, AssetMarker marker) {
     uint8_t pl[ASSET_PAYLOAD_SCRATCH];
-    size_t pn = assetEncodeTransferPayload(name, amountRaw, pl, sizeof(pl));
+    size_t pn = assetEncodeTransferPayload(name, amountRaw, pl, sizeof(pl), marker);
     if (!pn) return 0;
     return assetWrapScript(base, baseLen, pl, pn, out, cap);
 }
@@ -317,17 +379,18 @@ size_t assetEncodeIssueScript(const uint8_t * base, size_t baseLen,
                               const char * name, uint64_t quantityRaw,
                               uint8_t units, bool reissuable,
                               const uint8_t * ipfs, size_t ipfsLen,
-                              uint8_t * out, size_t cap) {
+                              uint8_t * out, size_t cap, AssetMarker marker) {
     uint8_t pl[ASSET_PAYLOAD_SCRATCH];
-    size_t pn = assetEncodeIssuePayload(name, quantityRaw, units, reissuable, ipfs, ipfsLen, pl, sizeof(pl));
+    size_t pn = assetEncodeIssuePayload(name, quantityRaw, units, reissuable, ipfs, ipfsLen, pl, sizeof(pl), marker);
     if (!pn) return 0;
     return assetWrapScript(base, baseLen, pl, pn, out, cap);
 }
 
 size_t assetEncodeOwnerScript(const uint8_t * base, size_t baseLen,
-                              const char * ownerName, uint8_t * out, size_t cap) {
+                              const char * ownerName, uint8_t * out, size_t cap,
+                              AssetMarker marker) {
     uint8_t pl[ASSET_PAYLOAD_SCRATCH];
-    size_t pn = assetEncodeOwnerPayload(ownerName, pl, sizeof(pl));
+    size_t pn = assetEncodeOwnerPayload(ownerName, pl, sizeof(pl), marker);
     if (!pn) return 0;
     return assetWrapScript(base, baseLen, pl, pn, out, cap);
 }
@@ -336,9 +399,9 @@ size_t assetEncodeReissueScript(const uint8_t * base, size_t baseLen,
                                 const char * name, uint64_t quantityRaw,
                                 uint8_t units, bool reissuable,
                                 const uint8_t * ipfs, size_t ipfsLen,
-                                uint8_t * out, size_t cap) {
+                                uint8_t * out, size_t cap, AssetMarker marker) {
     uint8_t pl[ASSET_PAYLOAD_SCRATCH];
-    size_t pn = assetEncodeReissuePayload(name, quantityRaw, units, reissuable, ipfs, ipfsLen, pl, sizeof(pl));
+    size_t pn = assetEncodeReissuePayload(name, quantityRaw, units, reissuable, ipfs, ipfsLen, pl, sizeof(pl), marker);
     if (!pn) return 0;
     return assetWrapScript(base, baseLen, pl, pn, out, cap);
 }

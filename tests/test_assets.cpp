@@ -60,6 +60,7 @@ MU_TEST(test_transfer_p2pkh_mainnet) {
     mu_assert(strcmp(info.name, "TESTASSET") == 0, "transfer name mismatch");
     mu_assert(info.amount == 12345678ULL, "transfer amount mismatch");
     mu_assert(info.hasIpfs == 0, "transfer should have no ipfs");
+    mu_assert(info.marker == ASSET_MARKER_RVN, "legacy payload must report the rvn marker");
 }
 
 MU_TEST(test_transfer_p2pkh_testnet) {
@@ -452,6 +453,191 @@ MU_TEST(test_build_issue_qualifier_sub) {
     checkOut(tx, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01872766e7108234b59432f535542030000000000000000000075", "qs out2 issue");
 }
 
+/* ── NIP-040: "xna" marker (parse / encode / build) ────────────────────────
+ * Vectors: the rvn vectors above with the 3 marker bytes swapped
+ * (72 76 6e -> 78 6e 61); lengths and every other byte are identical, which is
+ * exactly what neurai-create-transaction 0.7.0+ emits for assetMarker 'xna'. */
+
+MU_TEST(test_marker_prefix_helpers) {
+    uint8_t pfx[4];
+    mu_assert(assetMarkerPrefix(ASSET_MARKER_RVN, ASSET_TRANSFER, pfx) == 4 && memcmp(pfx, "rvnt", 4) == 0, "rvn transfer prefix");
+    mu_assert(assetMarkerPrefix(ASSET_MARKER_XNA, ASSET_TRANSFER, pfx) == 4 && memcmp(pfx, "xnat", 4) == 0, "xna transfer prefix");
+    mu_assert(assetMarkerPrefix(ASSET_MARKER_XNA, ASSET_ISSUE,    pfx) == 4 && memcmp(pfx, "xnaq", 4) == 0, "xna issue prefix");
+    mu_assert(assetMarkerPrefix(ASSET_MARKER_XNA, ASSET_OWNER,    pfx) == 4 && memcmp(pfx, "xnao", 4) == 0, "xna owner prefix");
+    mu_assert(assetMarkerPrefix(ASSET_MARKER_XNA, ASSET_REISSUE,  pfx) == 4 && memcmp(pfx, "xnar", 4) == 0, "xna reissue prefix");
+    mu_assert(assetMarkerPrefix(ASSET_MARKER_XNA, ASSET_NULL_TAG, pfx) == 0, "null-asset ops have no marker prefix");
+    mu_assert(assetMarkerPrefix((AssetMarker)7, ASSET_TRANSFER, pfx) == 0, "unknown marker rejected");
+    mu_assert(strcmp(assetMarkerName(ASSET_MARKER_RVN), "rvn") == 0, "marker name rvn");
+    mu_assert(strcmp(assetMarkerName(ASSET_MARKER_XNA), "xna") == 0, "marker name xna");
+    mu_assert(memcmp(assetMarkerBytes(ASSET_MARKER_XNA), "xna", 3) == 0, "marker bytes xna");
+    mu_assert(assetMarkerBytes((AssetMarker)7) == NULL, "unknown marker bytes NULL");
+    /* the legacy exported tags are still the rvn ones */
+    mu_assert(memcmp(XNA_TRANSFER_PREFIX, "rvnt", 4) == 0, "legacy XNA_TRANSFER_PREFIX stays rvnt");
+}
+
+MU_TEST(test_parse_xna_transfer_issue_owner_reissue) {
+    AssetInfo info;
+    /* transfer TESTASSET 0.12345678 (mainnet P2PKH), xna marker */
+    checkBaseAndOp(
+        "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc016786e6174095445535441535345544e61bc000000000075",
+        BASE_MAIN, ASSET_TRANSFER, &info);
+    mu_assert(info.marker == ASSET_MARKER_XNA, "xna transfer marker");
+    mu_assert(strcmp(info.name, "TESTASSET") == 0 && info.amount == 12345678ULL, "xna transfer fields");
+
+    /* issue MYASSET qty 1000, units 4, reissuable */
+    checkBaseAndOp(
+        "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc017786e6171074d59415353455400e876481700000004010075",
+        BASE_MAIN, ASSET_ISSUE, &info);
+    mu_assert(info.marker == ASSET_MARKER_XNA, "xna issue marker");
+    mu_assert(strcmp(info.name, "MYASSET") == 0 && info.amount == 100000000000ULL &&
+              info.units == 4 && info.reissuable == 1 && info.hasIpfs == 0, "xna issue fields");
+
+    /* owner MYASSET! */
+    checkBaseAndOp(
+        "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc00d786e616f084d5941535345542175",
+        BASE_MAIN, ASSET_OWNER, &info);
+    mu_assert(info.marker == ASSET_MARKER_XNA, "xna owner marker");
+    mu_assert(strcmp(info.name, "MYASSET!") == 0, "xna owner name");
+
+    /* reissue MYASSET qty 500, units 4, non-reissuable */
+    checkBaseAndOp(
+        "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc016786e6172074d59415353455400743ba40b000000040075",
+        BASE_MAIN, ASSET_REISSUE, &info);
+    mu_assert(info.marker == ASSET_MARKER_XNA, "xna reissue marker");
+    mu_assert(strcmp(info.name, "MYASSET") == 0 && info.amount == 50000000000ULL &&
+              info.units == 4 && info.reissuable == 0, "xna reissue fields");
+
+    /* PQ/AuthScript base on testnet (where xna is live) */
+    checkBaseAndOp(
+        "51206c24fe896c439911b91bfc74f82c240a94710d08223ba9d60dccf795ef4e6456c016786e6174095355422f4348494c44050000000000000075",
+        BASE_PQ, ASSET_TRANSFER, &info);
+    mu_assert(info.marker == ASSET_MARKER_XNA && strcmp(info.name, "SUB/CHILD") == 0 && info.amount == 5ULL,
+              "xna transfer to AuthScript base");
+}
+
+MU_TEST(test_parse_unknown_marker_rejected) {
+    AssetInfo info;
+    /* "abct": neither rvn nor xna -> not an asset script */
+    size_t sl = hx("76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc01661626374095445535441535345544e61bc000000000075",
+                   bufScript, sizeof(bufScript));
+    mu_assert(!assetParseScript(bufScript, sl, &info), "unknown marker must be rejected");
+    mu_assert(info.op == ASSET_NONE, "op reset on rejection");
+    /* "xnaz": known marker, unknown op letter */
+    sl = hx("76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc016786e617a095445535441535345544e61bc000000000075",
+            bufScript, sizeof(bufScript));
+    mu_assert(!assetParseScript(bufScript, sl, &info), "unknown op letter must be rejected");
+}
+
+MU_TEST(test_encode_xna_scripts) {
+    size_t bl = hx(BASE_MAIN, bufBase, sizeof(bufBase));
+    size_t n = assetEncodeTransferScript(bufBase, bl, "TESTASSET", 12345678ULL, bufEnc, sizeof(bufEnc), ASSET_MARKER_XNA);
+    eqHex(bufEnc, n, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc016786e6174095445535441535345544e61bc000000000075", "encode xna transfer");
+
+    n = assetEncodeIssueScript(bufBase, bl, "MYASSET", 100000000000ULL, 4, true, NULL, 0, bufEnc, sizeof(bufEnc), ASSET_MARKER_XNA);
+    eqHex(bufEnc, n, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc017786e6171074d59415353455400e876481700000004010075", "encode xna issue");
+
+    n = assetEncodeOwnerScript(bufBase, bl, "MYASSET!", bufEnc, sizeof(bufEnc), ASSET_MARKER_XNA);
+    eqHex(bufEnc, n, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc00d786e616f084d5941535345542175", "encode xna owner");
+
+    n = assetEncodeReissueScript(bufBase, bl, "MYASSET", 50000000000ULL, 4, false, NULL, 0, bufEnc, sizeof(bufEnc), ASSET_MARKER_XNA);
+    eqHex(bufEnc, n, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc016786e6172074d59415353455400743ba40b000000040075", "encode xna reissue");
+
+    /* payload-level encoders honour the marker too */
+    uint8_t pl[64];
+    size_t pn = assetEncodeTransferPayload("FOO", 1ULL, pl, sizeof(pl), ASSET_MARKER_XNA);
+    mu_assert(pn == 4 + 1 + 3 + 8 && memcmp(pl, "xnat", 4) == 0, "xna transfer payload prefix");
+    pn = assetEncodeTransferPayload("FOO", 1ULL, pl, sizeof(pl));
+    mu_assert(pn == 4 + 1 + 3 + 8 && memcmp(pl, "rvnt", 4) == 0, "default marker is still rvn");
+    mu_assert(assetEncodeTransferPayload("FOO", 1ULL, pl, sizeof(pl), (AssetMarker)7) == 0, "unknown marker encodes nothing");
+}
+
+MU_TEST(test_encode_parse_roundtrip_xna) {
+    size_t bl = hx(BASE_TEST, bufBase, sizeof(bufBase));
+    size_t n = assetEncodeIssueScript(bufBase, bl, "ROUNDTRIP", 777ULL, 2, false, NULL, 0, bufEnc, sizeof(bufEnc), ASSET_MARKER_XNA);
+    mu_assert(n > 0, "encode roundtrip xna");
+    AssetInfo info;
+    mu_assert(assetParseScript(bufEnc, n, &info), "parse roundtrip xna");
+    mu_assert(info.op == ASSET_ISSUE && info.marker == ASSET_MARKER_XNA, "roundtrip op/marker");
+    mu_assert(strcmp(info.name, "ROUNDTRIP") == 0 && info.amount == 777ULL && info.units == 2 && info.reissuable == 0, "roundtrip fields");
+}
+
+MU_TEST(test_build_with_xna_marker) {
+    /* Same outputs as test_build_issue_root / test_build_reissue / transfer,
+     * with the marker bytes swapped; null-asset outputs are untouched. */
+    Tx tx;
+    bool ok = assetBuildIssue(tx,
+        "NbURNXXXXXXXXXXXXXXXXXXXXXXXT65Gdr", assetBurnAmountSats(BURN_ISSUE_ROOT, 1),
+        ADDR_A, 5000ULL, ADDR_A, "MYASSET",
+        100000000000ULL, 4, true, NULL, 0, NULL, ASSET_MARKER_XNA);
+    mu_assert(ok && tx.outputsNumber == 4, "assetBuildIssue xna");
+    checkOut(tx, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc00d786e616f084d5941535345542175", "xna issue owner");
+    checkOut(tx, 3, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc017786e6171074d59415353455400e876481700000004010075", "xna issue");
+
+    Tx tx2;
+    ok = assetBuildReissue(tx2, ADDR_A, assetBurnAmountSats(BURN_REISSUE, 1), NULL, 0,
+                           ADDR_A, ADDR_A, "MYASSET", 1000000000ULL, 4, false, NULL, 0, ASSET_MARKER_XNA);
+    mu_assert(ok && tx2.outputsNumber == 3, "assetBuildReissue xna");
+    checkOut(tx2, 1, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc015786e6174084d5941535345542100e1f5050000000075", "xna reissue owner-transfer");
+    checkOut(tx2, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc016786e6172074d59415353455400ca9a3b00000000040075", "xna reissue");
+
+    Tx tx3;
+    ok = assetBuildTransfer(tx3, ADDR_A, "MYTOKEN", 250000000ULL, ASSET_MARKER_XNA);
+    mu_assert(ok && tx3.outputsNumber == 1, "assetBuildTransfer xna");
+    checkOut(tx3, 0, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc014786e6174074d59544f4b454e80b2e60e0000000075", "xna transfer");
+
+    /* qualifier tag: the transfer carries the marker, the null-asset tag does not */
+    Tx tx4;
+    const char * targets[] = { ADDR_A };
+    ok = assetBuildQualifierTag(tx4, "NXaddTagBurnXXXXXXXXXXXXXXXXWucUTr", assetBurnAmountSats(BURN_TAG_ADDRESS, 1),
+                                NULL, 0, ADDR_A, "#KYC", 1ULL, targets, 1, true, ASSET_MARKER_XNA);
+    mu_assert(ok && tx4.outputsNumber == 3, "assetBuildQualifierTag xna");
+    checkOut(tx4, 1, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc011786e617404234b5943010000000000000075", "xna qualifier transfer");
+    checkOut(tx4, 2, 0ULL, "c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60604234b594301", "null tag unchanged by marker");
+
+    /* unique + sub + qualifier issue variants */
+    Tx tx5;
+    const char * tags[] = { "nft1" };
+    ok = assetBuildIssueUnique(tx5, "NXissueUniqueAssetXXXXXXXXXXUBzP4Z", assetBurnAmountSats(BURN_ISSUE_UNIQUE, 1),
+                               NULL, 0, NULL, ADDR_A, "ROOT", tags, 1, NULL, NULL, ASSET_MARKER_XNA);
+    mu_assert(ok && tx5.outputsNumber == 3, "assetBuildIssueUnique xna");
+    checkOut(tx5, 1, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc012786e617405524f4f542100e1f5050000000075", "xna unique root-owner transfer");
+    checkOut(tx5, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc019786e617109524f4f54236e66743100e1f5050000000000000075", "xna unique nft1");
+
+    Tx tx6;
+    ok = assetBuildIssueSub(tx6, "NXissueSubAssetXXXXXXXXXXXXXX6B2JF", assetBurnAmountSats(BURN_ISSUE_SUB, 1),
+                            NULL, 0, NULL, NULL, ADDR_A, "ROOT/SUB", 500000000ULL, 2, true, NULL, 0, ASSET_MARKER_XNA);
+    mu_assert(ok && tx6.outputsNumber == 4, "assetBuildIssueSub xna");
+    checkOut(tx6, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc00e786e616f09524f4f542f5355422175", "xna sub-owner issue");
+    checkOut(tx6, 3, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc018786e617108524f4f542f5355420065cd1d0000000002010075", "xna sub issue");
+
+    Tx tx7;
+    ok = assetBuildIssueQualifier(tx7, "NXissueQuaLifierXXXXXXXXXXXXWurNcU", assetBurnAmountSats(BURN_ISSUE_QUALIFIER, 1),
+                                  NULL, 0, NULL, ADDR_A, "#KYC", 5ULL, 0, NULL, 0, ASSET_MARKER_XNA);
+    mu_assert(ok && tx7.outputsNumber == 2, "assetBuildIssueQualifier xna");
+    checkOut(tx7, 1, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc014786e617104234b5943050000000000000000000075", "xna qualifier issue");
+
+    /* restricted issue, freeze addresses, freeze asset */
+    Tx tx8;
+    ok = assetBuildIssueRestricted(tx8, "NXissueRestrictedXXXXXXXXXXXWpXx4H", assetBurnAmountSats(BURN_ISSUE_RESTRICTED, 1),
+                                   NULL, 0, ADDR_A, ADDR_A, "$REST", "KYC&ACC", 100000000000ULL, 0, true, NULL, 0, ASSET_MARKER_XNA);
+    mu_assert(ok && tx8.outputsNumber == 4, "assetBuildIssueRestricted xna");
+    checkOut(tx8, 1, 0ULL, "c05008074b594326414343", "verifier unchanged by marker");
+    checkOut(tx8, 2, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc012786e617405524553542100e1f5050000000075", "xna restricted owner-transfer");
+    checkOut(tx8, 3, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc015786e617105245245535400e876481700000000010075", "xna restricted issue");
+
+    Tx tx9;
+    ok = assetBuildFreezeAddresses(tx9, NULL, 0, ADDR_A, "$REST", targets, 1, true, ASSET_MARKER_XNA);
+    mu_assert(ok && tx9.outputsNumber == 2, "assetBuildFreezeAddresses xna");
+    checkOut(tx9, 0, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc012786e617405524553542100e1f5050000000075", "xna freeze owner-transfer");
+    checkOut(tx9, 1, 0ULL, "c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60705245245535401", "restriction unchanged by marker");
+
+    Tx tx10;
+    ok = assetBuildFreezeAsset(tx10, NULL, 0, ADDR_A, "$REST", true, ASSET_MARKER_XNA);
+    mu_assert(ok && tx10.outputsNumber == 2, "assetBuildFreezeAsset xna");
+    checkOut(tx10, 0, 0ULL, "76a9147e467332d7bf7d6f85673f075bf1c70f99b7b1f688acc012786e617405524553542100e1f5050000000075", "xna global-freeze owner-transfer");
+    checkOut(tx10, 1, 0ULL, "c050500705245245535403", "global restriction unchanged by marker");
+}
+
 /* ── Phase 5: name validation (golden table from the TS validateAndDetectType) */
 
 MU_TEST(test_name_validation) {
@@ -487,10 +673,13 @@ MU_TEST(test_name_validation) {
 MU_TEST(test_name_length_limits) {
     char buf[160];
     memset(buf, 'A', sizeof(buf));
-    /* root/sub max is 31 (mainnet) / 120 (testnet). */
-    buf[31] = '\0';
-    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_ROOT, "31 chars valid on mainnet");
-    mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_ROOT, "31 chars valid on testnet");
+    /* Node (assets_fromscript.cpp): full name <= 31 (mainnet) / 121 (testnet);
+     * root/sub one less (30 / 120) so the owner token "NAME!" still fits. */
+    buf[30] = '\0';
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_ROOT, "30 chars valid on mainnet");
+    buf[30] = 'A'; buf[31] = '\0';
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_INVALID, "31 chars invalid on mainnet (root)");
+    mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_ROOT,    "31 chars valid on testnet");
     buf[31] = 'A'; buf[32] = '\0';
     mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_INVALID, "32 chars invalid on mainnet");
     mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_ROOT,    "32 chars valid on testnet");
@@ -498,6 +687,26 @@ MU_TEST(test_name_length_limits) {
     mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_ROOT,    "120 chars valid on testnet");
     buf[120] = 'A'; buf[121] = '\0';
     mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_INVALID, "121 chars invalid on testnet");
+
+    /* Full-name types use the complete cap: owner 31 ok on mainnet, 32 not. */
+    memset(buf, 'A', sizeof(buf));
+    buf[30] = '!'; buf[31] = '\0';
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_OWNER,   "30-char root + '!' (31) valid on mainnet");
+    buf[30] = 'A'; buf[31] = '!'; buf[32] = '\0';
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_INVALID, "31-char root + '!' (32) invalid on mainnet");
+    mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_OWNER,   "31-char root + '!' valid on testnet");
+    /* unique: "ROOT#tag" is capped by the full-name limit (31 on mainnet). */
+    memset(buf, 'A', sizeof(buf));
+    buf[4] = '#'; buf[31] = '\0';           /* AAAA#AAAAAAAAAAAAAAAAAAAAAAAAAA = 31 */
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_UNIQUE,  "31-char unique valid on mainnet");
+    buf[31] = 'A'; buf[32] = '\0';
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_INVALID, "32-char unique invalid on mainnet");
+    /* qualifier: 31 full ok, 32 not. */
+    memset(buf, 'A', sizeof(buf));
+    buf[0] = '#'; buf[31] = '\0';
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_QUALIFIER, "31-char qualifier valid on mainnet");
+    buf[31] = 'A'; buf[32] = '\0';
+    mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_INVALID,   "32-char qualifier invalid on mainnet");
 }
 
 MU_TEST_SUITE(test_assets) {
@@ -538,6 +747,12 @@ MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_build_issue_unique);
     MU_RUN_TEST(test_build_issue_qualifier_root);
     MU_RUN_TEST(test_build_issue_qualifier_sub);
+    MU_RUN_TEST(test_marker_prefix_helpers);
+    MU_RUN_TEST(test_parse_xna_transfer_issue_owner_reissue);
+    MU_RUN_TEST(test_parse_unknown_marker_rejected);
+    MU_RUN_TEST(test_encode_xna_scripts);
+    MU_RUN_TEST(test_encode_parse_roundtrip_xna);
+    MU_RUN_TEST(test_build_with_xna_marker);
     MU_RUN_TEST(test_name_validation);
     MU_RUN_TEST(test_name_length_limits);
 }
