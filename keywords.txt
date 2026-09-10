@@ -3,6 +3,16 @@
 #######################################
 
 #######################################
+# Message.h Methods and Functions (KEYWORD2)
+#######################################
+
+messageMagicHash	KEYWORD2
+signMessage	KEYWORD2
+signMessageBase64	KEYWORD2
+recoverMessageSigner	KEYWORD2
+verifyMessage	KEYWORD2
+
+#######################################
 # Hash.h Methods and Functions (KEYWORD2)
 #######################################
 
