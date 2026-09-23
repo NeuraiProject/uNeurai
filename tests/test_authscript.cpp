@@ -140,6 +140,42 @@ MU_TEST(test_scriptpubkey_shape){
     mu_check(memcmp(spk + 2, commitment, 32) == 0);
 }
 
+MU_TEST(test_versioned_commitment_matches_v1_wrapper){
+    uint8_t pk[UNEURAI_PQ_PUBKEY_RAW_LEN];
+    size_t pkLen = fromHex(PQ_PUBKEY_HEX, sizeof(PQ_PUBKEY_HEX) - 1, pk, sizeof(pk));
+    mu_assert_int_eq(UNEURAI_PQ_PUBKEY_RAW_LEN, (int)pkLen);
+
+    /* Witness v1 through the versioned builder == the historical v1 builder. */
+    uint8_t c1[32];
+    mu_assert_int_eq(1, buildVersionedAuthScriptCommitment(1, UNEURAI_AUTHTYPE_PQ, pk, pkLen,
+                                                           WITNESS_SCRIPT, sizeof(WITNESS_SCRIPT), c1));
+    string got = toHex(c1, 32);
+    mu_assert_string_eq(EXPECTED_COMMITMENT, got.c_str());
+
+    /* Strict PQ v2: the witness version is the preimage lead byte. */
+    uint8_t c2[32];
+    mu_assert_int_eq(1, buildVersionedAuthScriptCommitment(2, UNEURAI_AUTHTYPE_PQ, pk, pkLen,
+                                                           WITNESS_SCRIPT, sizeof(WITNESS_SCRIPT), c2));
+    got = toHex(c2, 32);
+    mu_assert_string_eq("342531325374fcc5beb3b1b405dd84f81d994623a45bc375df7f1cd8e5dbcd67", got.c_str());
+}
+
+MU_TEST(test_versioned_scriptpubkey_shape){
+    uint8_t commitment[32];
+    for(int i = 0; i < 32; i++) commitment[i] = (uint8_t)(i + 0x11);
+
+    for(uint8_t v = 1; v <= 3; v++){
+        uint8_t spk[40] = {0};
+        size_t n = buildVersionedAuthScriptScriptPubKey(v, commitment, spk, sizeof(spk));
+        mu_assert_int_eq(34, (int)n);
+        mu_assert_int_eq(0x50 + v, spk[0]);     /* OP_1 / OP_2 / OP_3 */
+        mu_assert_int_eq(0x20, spk[1]);
+        mu_check(memcmp(spk + 2, commitment, 32) == 0);
+    }
+    uint8_t small[33];
+    mu_assert_int_eq(0, (int)buildVersionedAuthScriptScriptPubKey(3, commitment, small, sizeof(small)));
+}
+
 MU_TEST_SUITE(test_suite){
     MU_RUN_TEST(test_tagged_hash_known_input);
     MU_RUN_TEST(test_auth_descriptor_noauth);
@@ -147,6 +183,8 @@ MU_TEST_SUITE(test_suite){
     MU_RUN_TEST(test_auth_descriptor_pq_wrong_length_rejected);
     MU_RUN_TEST(test_commitment_matches_oracle);
     MU_RUN_TEST(test_scriptpubkey_shape);
+    MU_RUN_TEST(test_versioned_commitment_matches_v1_wrapper);
+    MU_RUN_TEST(test_versioned_scriptpubkey_shape);
 }
 
 int main(int argc, char *argv[]){

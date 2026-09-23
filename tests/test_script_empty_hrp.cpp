@@ -4,8 +4,8 @@
  * non-segwit chains. Before the M2 fix, Script::fromAddress() did
  *     memcmp(address, bech32, strlen(bech32))
  * with strlen("") == 0, which matches every address and would steer a real
- * nq1... / tnq1... into the legacy bech32 decode path. This test confirms
- * the hardened HRP loop classifies the address correctly as P2AUTHSCRIPT. */
+ * AuthScript address (tnc1... / tpq1... / tnq1...) into the legacy bech32
+ * decode path. This test confirms such addresses are classified correctly. */
 
 #include "minunit.h"
 #include "Neurai.h"
@@ -18,17 +18,24 @@ MU_TEST(test_legacy_empty_hrp_does_not_swallow_pq){
     mu_assert_int_eq(0, (int)strlen(NeuraiLegacy.bech32));
     mu_assert_int_eq(0, (int)strlen(NeuraiTest.bech32));
 
-    /* Build a valid tnq1... address. If the legacy loop matched empty HRPs
-     * it would short-circuit to P2WPKH and fail decode. */
+    /* Build a valid tnc1... (v1) address. If the legacy loop matched empty
+     * HRPs it would short-circuit to P2WPKH and fail decode. */
     uint8_t prog[32];
     for(int i = 0; i < 32; i++) prog[i] = (uint8_t)i;
     char addr[100] = {0};
-    mu_check(segwit_addr_encode(addr, "tnq", 1, prog, 32) == 1);
-    mu_check(memcmp(addr, "tnq1", 4) == 0);
+    mu_check(segwit_addr_encode(addr, "tnc", 1, prog, 32) == 1);
+    mu_check(memcmp(addr, "tnc1", 4) == 0);
 
     Script s(addr);
     mu_check(s.type() == P2AUTHSCRIPT);
     mu_assert_int_eq(34, (int)s.scriptLen);
+
+    /* Same for the strict ECDSA family (tnq1r..., witness v3). */
+    mu_check(segwit_addr_encode(addr, "tnq", 3, prog, 32) == 1);
+    mu_check(memcmp(addr, "tnq1r", 5) == 0);
+    Script s3(addr);
+    mu_check(s3.type() == P2AUTHSCRIPT_V3);
+    mu_assert_int_eq(34, (int)s3.scriptLen);
 }
 
 MU_TEST(test_legacy_address_still_recognized){

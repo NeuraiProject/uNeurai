@@ -1,5 +1,7 @@
 #include "PSBT.h"
 #include "Conversion.h"
+#include "NeuraiPQ.h"
+#include <string.h>
 #if USE_STD_STRING
 using std::string;
 #define String string
@@ -631,6 +633,33 @@ PSBT::~PSBT(){
     }
 }
 
+/* True for a witness-program prevout that is not segwit v0: OP_1..OP_16
+ * followed by a 2..40-byte push, optionally with an asset payload
+ * (OP_XNA_ASSET …). This covers every Neurai AuthScript family. */
+static bool isWitnessProgramPrevout(const Script & script){
+    const uint8_t * s = script.scriptArray;
+    size_t len = script.scriptLen;
+    if(s == NULL || len < 4) return false;
+    if(s[0] < 0x51 || s[0] > 0x60) return false;       /* OP_1 .. OP_16 */
+    if(s[1] < 2 || s[1] > 40) return false;
+    size_t progEnd = 2 + (size_t)s[1];
+    if(len < progEnd) return false;
+    return len == progEnd || s[progEnd] == 0xc0;        /* OP_XNA_ASSET */
+}
+
+/* True if `script` is the strict ECDSA (witness v3) program of `pub`. */
+static bool ecdsaStrictPrevoutMatches(const Script & script, PublicKey pub){
+    if(authScriptWitnessVersionOf(script.scriptArray, script.scriptLen) != UNEURAI_WITVER_ECDSA){
+        return false;
+    }
+    pub.compressed = true;
+    uint8_t sec[33];
+    if(pub.sec(sec, sizeof(sec)) != 33) return false;
+    uint8_t commitment[32];
+    if(!ecdsaCommitmentFromPubKey(sec, commitment)) return false;
+    return memcmp(script.scriptArray + 2, commitment, 32) == 0;
+}
+
 uint8_t PSBT::sign(const HDPrivateKey root){
     uint8_t fingerprint[4];
     root.fingerprint(fingerprint);
@@ -667,7 +696,25 @@ uint8_t PSBT::sign(const HDPrivateKey root){
                         // can sign - let's sign
                         SigHashType sighashType = txInsMeta[i].hasSighashType ? (SigHashType)txInsMeta[i].sighashType : SIGHASH_ALL;
                         uint8_t h[32];
-                        if(txInsMeta[i].witnessScript.length() > 1){ // P2WSH / P2SH_P2WSH
+                        const Script & prevScript = txInsMeta[i].txOut.scriptPubkey;
+                        if(isWitnessProgramPrevout(prevScript)){
+                            /* Neurai AuthScript (OP_1/OP_2/OP_3 <32>) or another
+                             * witness program: the legacy sighash below would
+                             * produce an invalid signature. Only the strict ECDSA
+                             * family (v3) is signed here, and only when the
+                             * program is this key's commitment. Generic v1 and
+                             * strict PQ v2 inputs are signed with
+                             * Tx::signAuthScriptInput* instead. The partial
+                             * signature must be finalized as the witness
+                             * [0x02, sig, pubkey, 0x51]. */
+                            if(!ecdsaStrictPrevoutMatches(prevScript, pk.publicKey())){
+                                continue;
+                            }
+                            if(tx.sigHashAuthScriptStrict(h, i, txInsMeta[i].txOut.amount,
+                                                          UNEURAI_WITVER_ECDSA, sighashType) != 32){
+                                continue;
+                            }
+                        }else if(txInsMeta[i].witnessScript.length() > 1){ // P2WSH / P2SH_P2WSH
                             tx.sigHashSegwit(h, i, txInsMeta[i].witnessScript, txInsMeta[i].txOut.amount, sighashType);
                         }else{
                             if(txInsMeta[i].redeemScript.length() > 1){

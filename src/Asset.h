@@ -12,7 +12,7 @@
  *
  *   Standard op (transfer / issue / owner / reissue):
  *       <baseScript> OP_XNA_ASSET(0xc0) <pushData(payload)> OP_DROP(0x75)
- *     baseScript = P2PKH (25B) | P2SH (23B) | AuthScript/PQ (OP_1 0x20 <32>)
+ *     baseScript = P2PKH (25B) | P2SH (23B) | AuthScript (OP_1 / OP_2 / OP_3 0x20 <32>)
  *     payload    = 3-byte marker ("rvn" | "xna") + op letter (t/q/o/r) + fields
  *
  *   NIP-040 (asset marker migration): historic outputs carry the Ravencoin
@@ -98,6 +98,12 @@ struct AssetInfo {
 
     /* null-asset / restriction flag (tag=1 / untag=0; freeze 0..3). */
     uint8_t flag;
+
+    /* Address-scoped null-asset ops only: witness version (1 / 2 / 3) of the
+     * AuthScript destination whose 32-byte commitment `base` points at, or 0
+     * for a P2PKH hash20 destination. Standard ops keep the full base script
+     * (OP_n 0x20 <32>), so use Script::authScriptVersion() on it instead. */
+    uint8_t witnessVersion;
 };
 
 /* Parse `script` as an asset script. On success fills `info` and returns true.
@@ -175,13 +181,15 @@ size_t assetEncodeReissueScript(const uint8_t * base, size_t baseLen,
  *
  * These carry no NIP-040 marker bytes (unaffected by the rvn/xna migration).
  * They have no trailing OP_DROP; the destination is embedded as a raw hash:
- *   address-scoped: OP_XNA_ASSET [OP_1] pushData(hash20|commitment32) pushData(name+flag)
+ *   address-scoped: OP_XNA_ASSET [OP_1|OP_2|OP_3] pushData(hash20|commitment32) pushData(name+flag)
  *   verifier:       OP_XNA_ASSET OP_RESERVED pushData(serializeString(verifier))
  *   global:         OP_XNA_ASSET OP_RESERVED OP_RESERVED pushData(name+flag)
  *
- * `base` is the destination's standard script (P2PKH 25B or AuthScript 34B); the
- * 20-byte hash / 32-byte commitment is extracted from it (P2SH is not used for
- * null-asset destinations, matching the TS encoder).
+ * `base` is the destination's standard script (P2PKH 25B or AuthScript 34B with
+ * OP_1 / OP_2 / OP_3); the 20-byte hash / 32-byte commitment is extracted from
+ * it and an AuthScript destination keeps its OP_n (P2SH is not used for
+ * null-asset destinations, matching the TS encoder). The node only accepts the
+ * OP_2 / OP_3 forms where the strict families are active.
  */
 
 /* Qualifier tag / untag (tag => flag 1, untag => flag 0). */

@@ -1,8 +1,13 @@
 /*
  * Neurai Post-Quantum (NIP-022 / ML-DSA-44) example.
  *
- * Generates a PQ address from a mnemonic, then signs an example transaction
- * using AuthScript witness-v1 inputs (authType = 0x01, witnessScript = OP_TRUE).
+ * Generates the PQ addresses of a mnemonic key and signs example transactions:
+ *   - generic AuthScript witness v1 (tnc1p… / nc1p…, authType 0x01,
+ *     witnessScript OP_TRUE) with Tx::signAuthScriptInputPQ — the address
+ *     family the NeuraiHW firmware uses today;
+ *   - strict PQ witness v2 (tpq1z… / pq1z…) with Tx::signAuthScriptInputPQStrict.
+ *     The strict families are only active on regtest for now: do not pay to a
+ *     pq1z… address on a chain where the node has not activated them.
  *
  * Hardware:    ESP32 (any S2/S3/C3 variant with >=320 KB RAM)
  * Dependency:  mldsa-esp32   https://github.com/NeuraiProject/mldsa-esp32
@@ -52,7 +57,7 @@ static void cryptoTask(void *arg){
     (void)arg;
 
     Serial.println();
-    Serial.println("=== Neurai PQ example (ML-DSA-44, witness v1 AuthScript) ===");
+    Serial.println("=== Neurai PQ example (ML-DSA-44, AuthScript v1 + strict PQ v2) ===");
 
     /* ------------- 1. HD-PQ derivation (NIP-022, hardened-only) ------------- */
     PQHDPrivateKey master;
@@ -67,7 +72,7 @@ static void cryptoTask(void *arg){
     hexPrint("pq seed     ", child.pqSeed, 32);
     hexPrint("chain code  ", child.chainCode, 32);
 
-    /* ------------- 2. ML-DSA-44 key pair + PQ address ------------- */
+    /* ------------- 2. ML-DSA-44 key pair + PQ addresses ------------- */
     static uint8_t pk[UNEURAI_PQ_PUBKEY_RAW_LEN];
     static uint8_t sk[2560];
     unsigned long t0 = millis();
@@ -78,9 +83,13 @@ static void cryptoTask(void *arg){
     Serial.print(millis() - t0);
     Serial.println(" ms");
 
-    char addr[100] = {0};
+    char addr[UNEURAI_AUTHSCRIPT_ADDRESS_MAX] = {0};
+    /* Generic AuthScript v1: tnc1pdsj0aztvgwv3rwgml360stpyp228zrggyga6n4sdenmetm6wv3tqse52vk */
     pqAddressFromPubKey(&NeuraiPQTest, pk, addr, sizeof(addr));
-    Serial.print("address: "); Serial.println(addr);
+    Serial.print("v1 address: "); Serial.println(addr);
+    /* Strict PQ v2: tpq1zxsjnzvjnwn7vt04nkx6qthvylqwej33r53duxawl0uwd3ewme4nsy38hld */
+    pqAddressFromPubKey(&NeuraiPQV2Test, pk, addr, sizeof(addr));
+    Serial.print("v2 address: "); Serial.println(addr);
 
     /* ------------- 3. Build a tiny Tx that spends one AuthScript input ------------- */
     Tx tx;
@@ -103,7 +112,7 @@ static void cryptoTask(void *arg){
     Script outScript(pkhScript, sizeof(pkhScript));
     tx.addOutput(TxOut(99990000ULL, outScript));
 
-    /* ------------- 4. Sign with AuthScript witness v1 ------------- */
+    /* ------------- 4. Sign with generic AuthScript witness v1 ------------- */
     uint8_t opTrue[1] = { 0x51 };
     Script witnessScript(opTrue, sizeof(opTrue));
 
@@ -116,6 +125,11 @@ static void cryptoTask(void *arg){
     if(!ok){
         Serial.println("signAuthScriptInputPQ failed"); vTaskDelete(NULL); return;
     }
+
+    /* To spend a strict PQ v2 (tpq1z…) output instead, the witnessScript is
+     * fixed (OP_TRUE) and the sighash commits to the witness version:
+     *     tx.signAuthScriptInputPQStrict(0, sk, pk, 100000000ULL, SIGHASH_ALL);
+     * Both produce the witness [0x01, sig||hashType, 0x05||pk, 0x51]. */
 
     /* ------------- 5. Emit the final transaction hex ------------- */
     static char txHex[12000];

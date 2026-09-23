@@ -781,55 +781,72 @@ int Tx::sigHashSegwit(uint8_t h[32], uint8_t inputIndex, const Script scriptPubK
     return 32;
 }
 
-int Tx::sigHashAuthScript(uint8_t h[32], uint8_t inputIndex, const Script witnessScript,
-                          uint64_t amount, uint8_t authType, SigHashType sighash) const{
+/* BIP-143-style AuthScript preimage shared by the generic (v1) and strict
+ * (v2/v3) sighashes. Mirrors the node's SignatureHash() for
+ * SIGVERSION_AUTHSCRIPT / SIGVERSION_AUTHSCRIPT_STRICT: after nLockTime the
+ * generic form writes authType, the strict form writes the witness version
+ * bound to authType and then authType; both end with the 4-byte hashType.
+ * `strictVersion` is 0 for the generic form. Transaction version 3 (NIP-014
+ * reference inputs, which also enter this preimage) is not supported. */
+static int authScriptSigHash(const Tx & tx, uint8_t h[32], uint8_t inputIndex,
+                             const Script & scriptCode, uint64_t amount,
+                             uint8_t authType, uint8_t strictVersion,
+                             SigHashType sighash){
+    if(inputIndex >= tx.inputsNumber || tx.version == 3){
+        memset(h, 0, 32);
+        return 0;
+    }
     DoubleSha s;
     s.begin();
     uint8_t arr[8];
     const uint8_t baseType = ((uint8_t)sighash) & 0x1f;
     const bool anyoneCanPay = (((uint8_t)sighash) & SIGHASH_ANYONECANPAY) != 0;
 
-    intToLittleEndian(version, arr, 4);
+    intToLittleEndian(tx.version, arr, 4);
     s.write(arr, 4);
 
     if(!anyoneCanPay){
-        hashPrevouts(h);
+        tx.hashPrevouts(h);
     }else{
         memset(h, 0, 32);
     }
     s.write(h, 32);
 
     if(!anyoneCanPay && baseType != SIGHASH_SINGLE && baseType != SIGHASH_NONE){
-        hashSequence(h);
+        tx.hashSequence(h);
     }else{
         memset(h, 0, 32);
     }
     s.write(h, 32);
 
-    s.write(txIns[inputIndex].hash, 32);
-    intToLittleEndian(txIns[inputIndex].outputIndex, arr, 4);
+    s.write(tx.txIns[inputIndex].hash, 32);
+    intToLittleEndian(tx.txIns[inputIndex].outputIndex, arr, 4);
     s.write(arr, 4);
-    s.serialize(&witnessScript, 0);
+    s.serialize(&scriptCode, 0);
 
     intToLittleEndian(amount, arr, 8);
     s.write(arr, 8);
-    intToLittleEndian(txIns[inputIndex].sequence, arr, 4);
+    intToLittleEndian(tx.txIns[inputIndex].sequence, arr, 4);
     s.write(arr, 4);
 
     if(baseType != SIGHASH_SINGLE && baseType != SIGHASH_NONE){
-        hashOutputs(h);
-    }else if(baseType == SIGHASH_SINGLE && inputIndex < outputsNumber){
+        tx.hashOutputs(h);
+    }else if(baseType == SIGHASH_SINGLE && inputIndex < tx.outputsNumber){
         DoubleSha outputHasher;
         outputHasher.begin();
-        outputHasher.serialize(&txOuts[inputIndex], 0);
+        outputHasher.serialize(&tx.txOuts[inputIndex], 0);
         outputHasher.end(h);
     }else{
         memset(h, 0, 32);
     }
     s.write(h, 32);
 
-    intToLittleEndian(locktime, arr, 4);
+    intToLittleEndian(tx.locktime, arr, 4);
     s.write(arr, 4);
+    if(strictVersion != 0){
+        /* Strict families: witness version bound to authType, then authType. */
+        s.write(&strictVersion, 1);
+    }
     /* AuthScript-specific: authType byte before the 4-byte hashType. */
     s.write(&authType, 1);
     intToLittleEndian(sighash, arr, 4);
@@ -837,6 +854,58 @@ int Tx::sigHashAuthScript(uint8_t h[32], uint8_t inputIndex, const Script witnes
 
     s.end(h);
     return 32;
+}
+
+int Tx::sigHashAuthScript(uint8_t h[32], uint8_t inputIndex, const Script witnessScript,
+                          uint64_t amount, uint8_t authType, SigHashType sighash) const{
+    return authScriptSigHash(*this, h, inputIndex, witnessScript, amount, authType, 0, sighash);
+}
+
+int Tx::sigHashAuthScriptStrict(uint8_t h[32], uint8_t inputIndex, uint64_t amount,
+                                uint8_t witnessVersion, SigHashType sighash) const{
+    const uint8_t authType = strictAuthScriptAuthType(witnessVersion);
+    if(authType == 0){
+        memset(h, 0, 32);
+        return 0;
+    }
+    /* scriptCode is the fixed OP_TRUE witnessScript of the strict template. */
+    const uint8_t opTrue[1] = { UNEURAI_STRICT_WITNESS_SCRIPT };
+    Script scriptCode(opTrue, sizeof(opTrue));
+    return authScriptSigHash(*this, h, inputIndex, scriptCode, amount, authType, witnessVersion, sighash);
+}
+
+int Tx::signAuthScriptInputECDSA(uint8_t inputIndex, const PrivateKey pk,
+                                 uint64_t amount, SigHashType sighash){
+    if(inputIndex >= inputsNumber) return 0;
+
+    /* 1. Strict sighash (witness v3, authType 0x02, scriptCode OP_TRUE). */
+    uint8_t h[32];
+    if(sigHashAuthScriptStrict(h, inputIndex, amount, UNEURAI_WITVER_ECDSA, sighash) != 32) return 0;
+
+    /* 2. ECDSA signature (RFC 6979, low-S) and the compressed public key the
+     *    v3 commitment is built from. */
+    Signature sig = pk.sign(h);
+    if(!sig.isValid()) return 0;
+    PublicKey pub = pk.publicKey();
+    pub.compressed = true;
+    uint8_t sec[33];
+    if(pub.sec(sec, sizeof(sec)) != 33) return 0;
+
+    /* 3. Strict witness stack: [0x02] [DER(sig)||hashType] [pubkey33] [0x51]. */
+    Witness w;
+    uint8_t authTypeByte = UNEURAI_AUTHTYPE_ECDSA;
+    w.push(&authTypeByte, 1);
+    w.push(sig, sighash);
+    w.push(sec, sizeof(sec));
+    uint8_t opTrue = UNEURAI_STRICT_WITNESS_SCRIPT;
+    w.push(&opTrue, 1);
+    txIns[inputIndex].witness = w;
+
+    /* Witness spends use an empty scriptSig. */
+    Script empty;
+    txIns[inputIndex].scriptSig = empty;
+
+    return 1;
 }
 
 Signature Tx::signInput(uint8_t inputIndex, const PrivateKey pk, const Script redeemScript, SigHashType sighash){
@@ -898,35 +967,29 @@ Signature Tx::signSegwitInput(uint8_t inputIndex, const PrivateKey pk, const Scr
 }
 
 #if defined(UNEURAI_ENABLE_PQ) && defined(ARDUINO_ARCH_ESP32)
-int Tx::signAuthScriptInputPQ(uint8_t inputIndex,
-                              const uint8_t * pqSecretKey,
-                              const uint8_t * pqPublicKey,
-                              uint64_t amount,
-                              const Script witnessScript,
-                              SigHashType sighash){
-    if(pqSecretKey == NULL || pqPublicKey == NULL) return 0;
-    if(inputIndex >= inputsNumber) return 0;
-
-    /* 1. AuthScript sighash (authType = 0x01 = PQ). */
-    uint8_t h[32];
-    sigHashAuthScript(h, inputIndex, witnessScript, amount,
-                      UNEURAI_AUTHTYPE_PQ, sighash);
-
-    /* 2. ML-DSA-44 signature. */
+/* ML-DSA-44 sign `h` and install the AuthScript witness stack
+ *   [authType] [sig||hashType] [0x05||pqPubKey] [witnessScript]
+ * on input `inputIndex` (empty scriptSig). */
+static int installPQAuthScriptWitness(Tx & tx, uint8_t inputIndex, const uint8_t h[32],
+                                      uint8_t authType,
+                                      const uint8_t * pqSecretKey,
+                                      const uint8_t * pqPublicKey,
+                                      const uint8_t * witnessScript, size_t wsLen,
+                                      SigHashType sighash){
+    /* ML-DSA-44 signature. */
     uint8_t sig[MLDSA44::SIGNATURE_SIZE];
     size_t siglen = 0;
     int r = MLDSA44::sign(sig, &siglen, h, 32, pqSecretKey);
     if(r != 0 || siglen != MLDSA44::SIGNATURE_SIZE) return 0;
 
-    /* 3. Build witness stack. Each push() prepends the varint length.
+    /* Build witness stack. Each push() prepends the varint length.
      *      [authType=0x01]                — 1 byte
      *      [sig || hashType]              — 2421 bytes (2420 + 1)
      *      [0x05 || pqPubKey]             — 1313 bytes
      *      [witnessScript]                — e.g. 1 byte (OP_TRUE) */
     Witness w;
 
-    uint8_t authTypeByte = UNEURAI_AUTHTYPE_PQ;
-    w.push(&authTypeByte, 1);
+    w.push(&authType, 1);
 
     /* sig || hashType (single-byte hashType, as in BIP-143 witness encoding). */
     uint8_t sigWithType[MLDSA44::SIGNATURE_SIZE + 1];
@@ -942,15 +1005,55 @@ int Tx::signAuthScriptInputPQ(uint8_t inputIndex,
     w.push(serPub, sizeof(serPub));
 
     /* witnessScript bytes (the raw script body, push() adds the varint). */
-    w.push(witnessScript.scriptArray, witnessScript.scriptLen);
+    w.push(witnessScript, wsLen);
 
-    txIns[inputIndex].witness = w;
+    tx.txIns[inputIndex].witness = w;
 
     /* AuthScript spends use an empty scriptSig. */
     Script empty;
-    txIns[inputIndex].scriptSig = empty;
+    tx.txIns[inputIndex].scriptSig = empty;
 
     return 1;
+}
+
+int Tx::signAuthScriptInputPQ(uint8_t inputIndex,
+                              const uint8_t * pqSecretKey,
+                              const uint8_t * pqPublicKey,
+                              uint64_t amount,
+                              const Script witnessScript,
+                              SigHashType sighash){
+    if(pqSecretKey == NULL || pqPublicKey == NULL) return 0;
+    if(inputIndex >= inputsNumber) return 0;
+
+    /* Generic AuthScript sighash (authType = 0x01 = PQ). */
+    uint8_t h[32];
+    if(sigHashAuthScript(h, inputIndex, witnessScript, amount,
+                         UNEURAI_AUTHTYPE_PQ, sighash) != 32){
+        return 0;
+    }
+    return installPQAuthScriptWitness(*this, inputIndex, h, UNEURAI_AUTHTYPE_PQ,
+                                      pqSecretKey, pqPublicKey,
+                                      witnessScript.scriptArray, witnessScript.scriptLen,
+                                      sighash);
+}
+
+int Tx::signAuthScriptInputPQStrict(uint8_t inputIndex,
+                                    const uint8_t * pqSecretKey,
+                                    const uint8_t * pqPublicKey,
+                                    uint64_t amount,
+                                    SigHashType sighash){
+    if(pqSecretKey == NULL || pqPublicKey == NULL) return 0;
+    if(inputIndex >= inputsNumber) return 0;
+
+    /* Strict sighash (witness v2, authType 0x01, scriptCode OP_TRUE). */
+    uint8_t h[32];
+    if(sigHashAuthScriptStrict(h, inputIndex, amount, UNEURAI_WITVER_PQ, sighash) != 32){
+        return 0;
+    }
+    const uint8_t opTrue[1] = { UNEURAI_STRICT_WITNESS_SCRIPT };
+    return installPQAuthScriptWitness(*this, inputIndex, h, UNEURAI_AUTHTYPE_PQ,
+                                      pqSecretKey, pqPublicKey,
+                                      opTrue, sizeof(opTrue), sighash);
 }
 
 int Tx::signCovenantCancelInputPQ(uint8_t inputIndex,

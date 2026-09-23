@@ -3,7 +3,9 @@
 C++ Neurai library for 32-bit microcontrollers. The library supports [Arduino IDE](https://www.arduino.cc/), [ARM mbed](https://www.mbed.com/en/) and bare metal.<br>
 It provides a collection of convenient classes for Neurai: private and public keys, HD wallets, generation of the recovery phrases, PSBT transaction formats, scripts and **Neurai assets** (issue, transfer and manage) — everything required for a hardware wallet or other neurai-powered device. See the [Assets](#assets-issue-transfer-and-manage) section.
 
-Optional **Post-Quantum** support (ML-DSA-44, NIP-022, BIP-350 bech32m addresses, witness-v1 AuthScript transactions) is available behind the `-DUNEURAI_ENABLE_PQ` build flag — see the [Post-Quantum support](#post-quantum-support-ml-dsa-44-nip-022) section.
+It speaks every Neurai address type: Legacy Base58 P2PKH and the Bech32m AuthScript families — generic AuthScript witness v1 (`nc1p…`), strict PQ witness v2 (`pq1z…`) and strict ECDSA witness v3 (`nq1r…`) — see [Address types](#address-types). Optional **Post-Quantum** signing (ML-DSA-44, NIP-022) is available with the `mldsa-esp32` backend — see the [Post-Quantum support](#post-quantum-support-ml-dsa-44-nip-022) section.
+
+> **0.2.0 changes the AuthScript address encoding.** Witness v1 addresses are now `nc1p…` / `tnc1p…` (they used to be `nq1p…` / `tnq1p…`, which the node now rejects), and `nq` / `tnq` belong to the strict ECDSA family. See [Upgrading from 0.0.x](#upgrading-from-00x).
 
 The library should work on any decent 32-bit microcontroller, like esp32, riscV, stm32 series and others. It *doesn't work* on 8-bit microcontrollers like a classic Arduino as these microcontrollers are not powerful enough to run complicated crypto algorithms.
 
@@ -19,16 +21,72 @@ Telegram group: https://t.me/neuraiproject
 
  ## Networks
 
- Micro-Neurai supports the following network configurations:
+ Micro-Neurai supports the following network configurations (the name in
+ brackets is the equivalent [`@neuraiproject/neurai-key`](https://www.npmjs.com/package/@neuraiproject/neurai-key) 5 network):
 
- - **Neurai**: (Default) The mainnet network. Uses BIP-44 coin type `1900`.
- - **NeuraiLegacy**: Mainnet network using BIP-44 coin type `0`. Compatible with legacy wallet implementations.
- - **NeuraiTest**: The testnet network. Uses BIP-44 coin type `1` and WIF prefix `0xef`, as the node does.
+ - **Neurai**: (Default) The mainnet network. Uses BIP-44 coin type `1900` (`xna-legacy`).
+ - **NeuraiLegacy**: Mainnet network using BIP-44 coin type `0`. Compatible with legacy wallet implementations (`xna-old-legacy`).
+ - **NeuraiTest**: The testnet network. Uses BIP-44 coin type `1` and WIF prefix `0xef`, as the node does (`xna-legacy-test`). Regtest uses the same prefixes.
 
- Post-Quantum networks (only present when built with `-DUNEURAI_ENABLE_PQ`):
+ These describe Base58 P2PKH addresses. The Bech32m AuthScript families are
+ selected by HRP (next section); `chainNetworkIsTestnet(net)` tells which HRP
+ (mainnet or testnet) a `ChainNetwork` maps to.
 
- - **NeuraiPQ**: Post-Quantum mainnet (HRP `nq`, BIP-32 purpose `100`, coin type `1900`, extended-key version `xpqpriv`).
- - **NeuraiPQTest**: Post-Quantum testnet (HRP `tnq`, coin type `1`, extended-key version `tpqpriv`).
+ PQ key networks (`ChainNetworkPQ`, NIP-022 key tree `m_pq/100'/coin'/…`, extended-key version `xpqpriv` / `tpqpriv`):
+
+ - **NeuraiPQ** / **NeuraiPQTest** (alias `NeuraiPQV1` / `NeuraiPQV1Test`): generic AuthScript witness v1 with a PQ key, HRP `nc` / `tnc` (`xna-authscript` / `xna-authscript-test`). This is the phase-1 PQ flow of the NeuraiHW firmware.
+ - **NeuraiPQV2** / **NeuraiPQV2Test**: strict PQ witness v2, HRP `pq` / `tpq` (`xna-pq` / `xna-pq-test`).
+
+## Address types
+
+| Family | Witness | HRP (main / test) | scriptPubKey | authType | witnessScript | `ScriptType` | neurai-key 5 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Legacy P2PKH | — | Base58 `N…` / `t…` | `76a914…88ac` | — | — | `P2PKH` | `xna-legacy`, `xna-old-legacy` |
+| Generic AuthScript | v1 | `nc` / `tnc` → `nc1p…` | `51 20 <C>` | any | any | `P2AUTHSCRIPT` | `xna-authscript` |
+| Strict PQ (ML-DSA-44) | v2 | `pq` / `tpq` → `pq1z…` | `52 20 <C>` | `0x01` | `0x51` (fixed) | `P2AUTHSCRIPT_V2` | `xna-pq` |
+| Strict ECDSA (secp256k1) | v3 | `nq` / `tnq` → `nq1r…` | `53 20 <C>` | `0x02` | `0x51` (fixed) | `P2AUTHSCRIPT_V3` | `xna` |
+
+`C = taggedHash("NeuraiAuthScript", witnessVersion || auth_descriptor || SHA256(witnessScript))`,
+with `auth_descriptor = 0x01 || HASH160(0x05 || pq_pubkey)` (PQ) or
+`0x02 || HASH160(compressed_pubkey)` (ECDSA). The witness version is the first
+byte of the preimage, so one key has a different program in each family.
+
+- The node only accepts these HRP / witness-version pairs. `nq1p…` / `tnq1p…`
+  (witness v1 under `nq`) is **invalid**; `Script("nq1p…")` is empty and
+  `authScriptAddressDecode()` returns 0.
+- Decoding follows the node: Bech32m first (any case), then Base58, so Base58
+  addresses that happen to start with `NQ1` / `Nc1` still decode as P2PKH.
+- **Activation:** the strict families (v2, v3) are active only on regtest for
+  now. Before activation the node refuses `pq1…` / `nq1…` addresses because an
+  `OP_2` / `OP_3` output is anyone-can-spend there. uNeurai cannot know the
+  activation state: do not build outputs to v2/v3 addresses on a chain where
+  they are not active.
+- DePIN messaging is P2PKH-only in the node: keep DePIN identities on
+  `m/44'/<coin>'/100'/0/0` Legacy addresses.
+
+```cpp
+#include "Neurai.h"
+#include "NeuraiPQ.h"
+
+// Any family: address -> scriptPubKey -> address
+Script spk("tnq1rskqpx9d5ccaj8eplrz7rlp9ds5w9wpppmqgenvmzeflmlme8p6yqgl0c8d");
+spk.type();                  // P2AUTHSCRIPT_V3
+spk.authScriptVersion();     // 3
+spk.address(&NeuraiTest);    // "tnq1rskqpx9…"; also works for tnc1p… and tpq1z…
+
+// Strict ECDSA address of a secp256k1 key (neurai-key 5 "xna": m/84'/1900'/0'/0/0)
+HDPrivateKey root("...mnemonic...", "");
+PrivateKey key = root.derive("m/84'/1900'/0'/0/0");
+key.ecdsaAddress();                      // "nq1r…"
+key.publicKey().ecdsaAddress(&NeuraiTest); // "tnq1r…"
+Script v3(key.publicKey(), P2AUTHSCRIPT_V3); // OP_3 0x20 <C>
+
+// Low level
+uint8_t ver; bool testnet; uint8_t program[32];
+char buf[UNEURAI_AUTHSCRIPT_ADDRESS_MAX];
+authScriptAddressDecode("tpq1z…", &ver, &testnet, program); // ver 2, testnet true
+authScriptAddressEncode(2, true, program, buf, sizeof(buf));
+```
 
 ## Installation
 
@@ -98,31 +156,49 @@ Serial.println(tx.toBase64());
 
 ## Post-Quantum support (ML-DSA-44, NIP-022)
 
-uNeurai includes optional support for the **Neurai PQ** chain (witness v1
-AuthScript with ML-DSA-44 signatures, NIP-022 HD derivation, BIP-350 bech32m
-addresses with the `nq` / `tnq` HRPs).
+uNeurai includes optional support for Neurai **Post-Quantum** keys: ML-DSA-44
+signatures, NIP-022 HD derivation and the two AuthScript families that carry a
+PQ key — generic AuthScript witness v1 (`nc1p…` / `tnc1p…`, authType `0x01`,
+witnessScript `OP_TRUE`) and strict PQ witness v2 (`pq1z…` / `tpq1z…`).
 
 The PQ surface is **opt-in**: the post-quantum signing backend is supplied by
 the separate [`mldsa-esp32`](https://github.com/NeuraiProject/mldsa-esp32)
-library and is only compiled when you define `UNEURAI_ENABLE_PQ`. Without that
-flag uNeurai builds exactly as before on every supported platform.
+library and is only compiled when you define `UNEURAI_ENABLE_PQ` on an ESP32
+target. Without it uNeurai builds exactly as before on every supported platform.
 
-### What you get with `-DUNEURAI_ENABLE_PQ`
+### What you get
 
-- `ChainNetworkPQ`, `NeuraiPQ`, `NeuraiPQTest` network descriptors.
-- `pqAddressFromPubKey()` / `pqAddressDecode()` — `nq1…` / `tnq1…` codec.
-- `Script::address(buffer, len, &NeuraiPQTest)` overload to render PQ
-  addresses; `Script("tnq1…")` round-trips via `P2AUTHSCRIPT`.
+- `ChainNetworkPQ` descriptors `NeuraiPQ` / `NeuraiPQTest` (v1, `nc` / `tnc`)
+  and `NeuraiPQV2` / `NeuraiPQV2Test` (strict v2, `pq` / `tpq`).
+- `pqAddressFromPubKey()` / `pqAddressDecode()` — address of a PQ key in the
+  family of the network you pass (`&NeuraiPQTest` → `tnc1p…`,
+  `&NeuraiPQV2Test` → `tpq1z…`).
+- `buildAuthScriptCommitment()` / `buildAuthScriptScriptPubKey()` (v1) and
+  `buildVersionedAuthScriptCommitment()` / `buildVersionedAuthScriptScriptPubKey()`
+  (v1, v2, v3; the strict versions enforce the consensus template).
 - `PQHDPrivateKey` — NIP-022 hardened-only HD derivation, `xpqpriv` / `tpqpriv`
   serialization.
-- `Tx::sigHashAuthScript(...)` and `Tx::signAuthScriptInputPQ(...)` —
-  BIP-143-style sighash with an extra `auth_type` byte, plus the witness-v1
-  signing path.
+- `Tx::sigHashAuthScript(...)` (generic v1: BIP-143-style preimage with an extra
+  `authType` byte) and `Tx::sigHashAuthScriptStrict(...)` (v2 / v3: the same
+  preimage with scriptCode `OP_TRUE` and `witnessVersion || authType` before
+  the hashType). A v1-style signature is **not** valid for a strict input.
+- `Tx::signAuthScriptInputPQ(...)` (v1) and `Tx::signAuthScriptInputPQStrict(...)`
+  (v2). Both build the witness `[0x01, sig||hashType, 0x05||pk, witnessScript]`.
 
-Note that everything *except* `PQHDPrivateKey::materializeKeyPair` and
-`Tx::signAuthScriptInputPQ` compiles on every supported platform, so address
-generation, HD derivation, sighash computation and bech32m codec can be tested
-in host-side CI without the `mldsa-esp32` backend.
+Everything *except* `PQHDPrivateKey::materializeKeyPair`,
+`Tx::signAuthScriptInputPQ`, `Tx::signAuthScriptInputPQStrict` and
+`Tx::signCovenantCancelInputPQ` compiles on every supported platform, so address
+generation, HD derivation, sighash computation and the bech32m codec can be
+tested in host-side CI without the `mldsa-esp32` backend.
+
+The strict ECDSA family (v3) needs no PQ backend:
+`Tx::signAuthScriptInputECDSA(index, privateKey, amount)` signs an `nq1r…`
+input with the witness `[0x02, DER(sig)||hashType, compressed pubkey, 0x51]`,
+and `PSBT::sign()` signs v3 inputs whose program matches the derived key.
+`PSBT::sign()` never signs v1 / v2 AuthScript inputs (a legacy sighash would
+be invalid for them): use the `Tx::signAuthScriptInput*` functions instead.
+Transactions with version 3 (NIP-014 reference inputs) are not supported by
+the AuthScript sighashes (they return 0).
 
 ### Enabling PQ in PlatformIO
 
@@ -149,8 +225,8 @@ build_flags = -DUNEURAI_ENABLE_PQ
 ### PQ usage example
 
 End-to-end flow: derive an ML-DSA-44 key via NIP-022 from a BIP-39 mnemonic, get
-the corresponding `tnq1…` address, then sign a transaction input with witness v1
-AuthScript.
+the corresponding `tnc1p…` (v1) and `tpq1z…` (strict v2) addresses, then sign
+transaction inputs.
 
 ```cpp
 #include "Neurai.h"
@@ -163,16 +239,18 @@ master.fromMnemonic("...12-word mnemonic...", /*mlen*/ 71, "", 0, &NeuraiPQTest)
 PQHDPrivateKey child;
 master.derive("m_pq/100'/1'/0'/0'/0'", &child);
 
-// 2. ML-DSA-44 key pair + address (ESP32-only — needs mldsa-esp32).
+// 2. ML-DSA-44 key pair + addresses (ESP32-only — needs mldsa-esp32).
 uint8_t pk[UNEURAI_PQ_PUBKEY_RAW_LEN];  // 1312 bytes
 uint8_t sk[2560];
 child.materializeKeyPair(pk, sk);       // ~1-2 s on ESP32-S3
 
-char addr[100] = {0};
+char addr[UNEURAI_AUTHSCRIPT_ADDRESS_MAX] = {0};
 pqAddressFromPubKey(&NeuraiPQTest, pk, addr, sizeof(addr));
-// addr -> "tnq1pdsj0aztvgwv3rwgml360stpyp228zrggyga6n4sdenmetm6wv3tqzddk95"
+// addr -> "tnc1pdsj0aztvgwv3rwgml360stpyp228zrggyga6n4sdenmetm6wv3tqse52vk"
+pqAddressFromPubKey(&NeuraiPQV2Test, pk, addr, sizeof(addr));
+// addr -> "tpq1zxsjnzvjnwn7vt04nkx6qthvylqwej33r53duxawl0uwd3ewme4nsy38hld"
 
-// 3. Sign one AuthScript input (witnessScript = OP_TRUE for phase 1).
+// 3a. Spend a generic v1 (tnc1p…) input (witnessScript = OP_TRUE).
 Tx tx;
 // ... populate tx.version, addInput(...), addOutput(...) ...
 uint8_t opTrue[1] = { 0x51 };
@@ -181,6 +259,9 @@ tx.signAuthScriptInputPQ(/*input*/ 0, sk, pk,
                          /*amount sats*/ 100000000ULL,
                          witnessScript, SIGHASH_ALL);
 // tx.txIns[0].witness now carries [authType, sig||hashType, 0x05||pk, witnessScript]
+
+// 3b. Spend a strict v2 (tpq1z…) input: fixed OP_TRUE, strict sighash.
+tx.signAuthScriptInputPQStrict(/*input*/ 1, sk, pk, /*amount sats*/ 100000000ULL);
 ```
 
 See [`examples/neurai_pq/neurai_pq.ino`](examples/neurai_pq/neurai_pq.ino) for a
@@ -193,6 +274,53 @@ The host test suite under `tests/` includes vectors generated by
 (`tmp/neurai-key`, `tmp/neurai-sign-transaction`). The address, commitment,
 auth_descriptor, NIP-022 HD seed, `tpqpriv` and AuthScript sighash all match
 byte-for-byte.
+
+The address-family, strict-sighash and strict-asset vectors
+(`tests/test_address_families.cpp`, `tests/test_sighash_authscript.cpp`,
+`tests/test_assets.cpp`, `tests/test_pq_sign.cpp`) come from a Neurai-DePIN
+regtest node: addresses and scriptPubKeys from `getnewaddress` /
+`validateaddress`, and v1 / v2 / v3 spends signed by this library that the node
+accepted with `testmempoolaccept`.
+
+### Running the tests
+
+```sh
+cd tests
+make run                                   # host build (g++), no PQ backend
+make run MLDSA_DIR=/path/to/mldsa-esp32/src  # also builds and runs the ML-DSA signers
+```
+
+With `MLDSA_DIR` the suite is built into `tests/build/pq` with the ESP32-only
+PQ code enabled; the ESP32 TRNG is replaced by `tests/pq_host/randombytes_host.c`.
+
+## Upgrading from 0.0.x
+
+Version 0.2.0, not 0.1.0: the PlatformIO registry already lists an older
+uNeurai 0.1.0 without the PQ headers, so this release skips that number.
+
+0.2.0 follows the address types of the Neurai node (Neurai-DePIN) and
+`@neuraiproject/neurai-key` 5. Breaking changes:
+
+- **`NeuraiPQ` / `NeuraiPQTest` HRPs are now `nc` / `tnc`.** They still describe
+  the generic AuthScript witness v1 family (same key tree, same commitment,
+  same `OP_1 0x20 <C>` scriptPubKey), so `pqAddressFromPubKey()` now returns
+  `nc1p…` / `tnc1p…` instead of `nq1p…` / `tnq1p…`. Funds sent to an old
+  address are reachable through the re-encoded address.
+- **`nq1…` / `tnq1…` now means strict ECDSA witness v3.** `Script("nq1p…")`,
+  `pqAddressDecode("tnq1p…", …)` and `authScriptAddressDecode()` reject the old
+  v1 encoding, like the node.
+- `Script::type()` returns the new `P2AUTHSCRIPT_V2` / `P2AUTHSCRIPT_V3` for
+  `OP_2` / `OP_3` programs (`P2AUTHSCRIPT` stays witness v1 only).
+- `Script::address(…, const ChainNetworkPQ *)` renders the family of the script
+  (a v3 output with `&NeuraiPQTest` gives `tnq1r…`), and
+  `Script::address(…, const ChainNetwork *)` now renders AuthScript outputs
+  too (it used to return 0 for them).
+- `Tx::sigHashAuthScript()` returns 0 (and signing fails) for an out-of-range
+  input or a version-3 transaction instead of hashing garbage.
+- `PSBT::sign()` skips AuthScript v1 / v2 and other witness-program inputs
+  instead of producing an invalid legacy signature, and signs strict ECDSA v3
+  inputs with the strict sighash.
+- `AssetInfo` has a new `witnessVersion` field (null-asset destinations).
 
 ## Message signing (`signmessage` compatible)
 
@@ -230,8 +358,9 @@ byte for byte, including the negative cases N1/N2.
 ## Assets (issue, transfer and manage)
 
 Micro-Neurai understands Neurai assets (the Ravencoin-style asset layer) on both
-**Mainnet and Testnet**, for legacy (P2PKH) and Post-Quantum (AuthScript)
-destinations. Asset support is split across four headers and is completely
+**Mainnet and Testnet**, for legacy (P2PKH) and AuthScript destinations
+(generic v1 `nc1p…`, strict PQ v2 `pq1z…` and strict ECDSA v3 `nq1r…`; the
+node accepts assets on v2/v3 only where the strict families are active). Asset support is split across four headers and is completely
 allocation-free:
 
 - **`Asset.h`** — the on-chain script codec. `assetParseScript()` decodes any

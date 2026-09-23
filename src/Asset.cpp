@@ -130,8 +130,8 @@ static size_t leadingBaseLen(const uint8_t * s, size_t len) {
         s[23] == OP_EQUALVERIFY && s[24] == OP_CHECKSIG) return 25;
     /* P2SH: OP_HASH160 0x14 <20> OP_EQUAL */
     if (len >= 23 && s[0] == OP_HASH160 && s[1] == 20 && s[22] == OP_EQUAL) return 23;
-    /* AuthScript (witness v1 / PQ): OP_1 0x20 <32> */
-    if (len >= 34 && s[0] == OP_1 && s[1] == 32) return 34;
+    /* AuthScript: OP_1 (generic v1), OP_2 (strict PQ) or OP_3 (strict ECDSA) 0x20 <32> */
+    if (len >= 34 && (s[0] == OP_1 || s[0] == OP_2 || s[0] == OP_3) && s[1] == 32) return 34;
     /* P2WPKH: 0x00 0x14 <20> */
     if (len >= 22 && s[0] == OP_0 && s[1] == 20) return 22;
     /* P2WSH: 0x00 0x20 <32> */
@@ -148,6 +148,7 @@ static void resetInfo(AssetInfo * info) {
     info->units = 0; info->reissuable = 0; info->hasIpfs = 0;
     info->ipfs = NULL; info->ipfsLen = 0;
     info->flag = 0;
+    info->witnessVersion = 0;
 }
 
 /* Classify + parse a standard payload (4-byte tag + fields). */
@@ -210,9 +211,12 @@ static bool parseNullAsset(const uint8_t * s, size_t len, AssetInfo * info) {
         return true;
     }
     /* address-scoped null asset (tag/untag, freeze/unfreeze address):
-     *   OP_XNA_ASSET [OP_1] pushData(dest) pushData(name+flag) */
+     *   OP_XNA_ASSET [OP_1|OP_2|OP_3] pushData(dest) pushData(name+flag) */
     size_t o = 1;
-    if (len >= 2 && s[1] == OP_1) o = 2;     /* AuthScript destination */
+    if (len >= 2 && (s[1] == OP_1 || s[1] == OP_2 || s[1] == OP_3)) {
+        o = 2;                               /* AuthScript destination (v1/v2/v3) */
+        info->witnessVersion = (uint8_t)(s[1] - OP_1 + 1);
+    }
     size_t destOff, destLen, afterDest;
     if (!readPush(s, len, o, &destOff, &destLen, &afterDest)) return false;
     info->base = s + destOff;
@@ -408,7 +412,7 @@ size_t assetEncodeReissueScript(const uint8_t * base, size_t baseLen,
 
 /* ── Null-asset encoders ─────────────────────────────────────────────────────
  * Write the embedded destination: OP_XNA_ASSET pushData(hash20) for a P2PKH
- * base, or OP_XNA_ASSET OP_1 pushData(commitment32) for an AuthScript base. */
+ * base, or OP_XNA_ASSET OP_n pushData(commitment32) for an AuthScript base (n = 1, 2, 3). */
 static bool bNullDest(Buf * b, const uint8_t * base, size_t baseLen) {
     /* P2PKH: OP_DUP OP_HASH160 0x14 <20> OP_EQUALVERIFY OP_CHECKSIG → hash at +3 */
     if (baseLen == 25 && base[0] == OP_DUP && base[1] == OP_HASH160 && base[2] == 20) {
@@ -416,10 +420,10 @@ static bool bNullDest(Buf * b, const uint8_t * base, size_t baseLen) {
         bpushdata(b, base + 3, 20);
         return true;
     }
-    /* AuthScript: OP_1 0x20 <32> → commitment at +2 */
-    if (baseLen == 34 && base[0] == OP_1 && base[1] == 32) {
+    /* AuthScript: OP_n 0x20 <32> (n = 1, 2, 3) → OP_XNA_ASSET OP_n <commitment> */
+    if (baseLen == 34 && (base[0] == OP_1 || base[0] == OP_2 || base[0] == OP_3) && base[1] == 32) {
         bput(b, OP_XNA_ASSET);
-        bput(b, OP_1);
+        bput(b, base[0]);
         bpushdata(b, base + 2, 32);
         return true;
     }

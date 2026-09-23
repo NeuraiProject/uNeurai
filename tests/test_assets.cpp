@@ -13,7 +13,9 @@
  * (the canonical TS encoder). Each `script` is the exact on-chain scriptPubkey
  * hex; the C++ parser must reproduce op / base / name / amount / units /
  * reissuable byte-for-byte. Addresses used: mainnet legacy (N…), testnet legacy
- * (t…) and testnet AuthScript/PQ (tnq1…).
+ * (t…) and testnet generic AuthScript v1 (tnc1…, formerly encoded as tnq1p…;
+ * the scriptPubKey is unchanged). The strict v2/v3 vectors near the end come
+ * from a Neurai-DePIN regtest node (issue / transfer / addtagtoaddress).
  */
 
 static uint8_t bufScript[256];
@@ -709,6 +711,88 @@ MU_TEST(test_name_length_limits) {
     mu_assert(assetDetectAndValidate(buf, false) == ASSET_NAME_INVALID,   "32-char qualifier invalid on mainnet");
 }
 
+/* ── Strict AuthScript destinations (OP_2 / OP_3) — regtest node vectors ──
+ * `issue ESPSTRICT 1000 tnq1rskqpx…`, `transfer ESPSTRICT 5 tpq1z26xe87…` and
+ * `addtagtoaddress #ESPTAG tnq1rskqpx…` on a regtest node (asset marker "xna").
+ * The node accepts OP_XNA_ASSET after OP_2 / OP_3 only where the strict
+ * families are active. */
+#define BASE_V2   "5220568d93f98f8b79ba438813ef4835d7e0f564ae132e31f2a75d441a1f7578413a"
+#define BASE_V3   "532085801315b4c63b23e43f18bc3f84ad851c570421d81199b362ca7fbfef270e88"
+#define NODE_V3_OWNER    BASE_V3 "c00f786e616f0a4553505354524943542175"
+#define NODE_V3_ISSUE    BASE_V3 "c019786e61710945535053545249435400e876481700000000010075"
+#define NODE_V2_TRANSFER BASE_V2 "c016786e6174094553505354524943540065cd1d0000000075"
+#define NODE_V3_NULL_TAG "c0532085801315b4c63b23e43f18bc3f84ad851c570421d81199b362ca7fbfef270e8809072345535054414701"
+
+MU_TEST(test_parse_strict_authscript_bases) {
+    AssetInfo info;
+    checkBaseAndOp(NODE_V3_ISSUE, BASE_V3, ASSET_ISSUE, &info);
+    mu_assert(strcmp(info.name, "ESPSTRICT") == 0, "v3 issue name mismatch");
+    mu_assert(info.amount == 100000000000ULL, "v3 issue quantity mismatch");
+    mu_assert(info.units == 0 && info.reissuable == 1 && info.hasIpfs == 0, "v3 issue flags mismatch");
+    mu_assert(info.marker == ASSET_MARKER_XNA, "v3 issue marker");
+
+    checkBaseAndOp(NODE_V3_OWNER, BASE_V3, ASSET_OWNER, &info);
+    mu_assert(strcmp(info.name, "ESPSTRICT!") == 0, "v3 owner name mismatch");
+
+    checkBaseAndOp(NODE_V2_TRANSFER, BASE_V2, ASSET_TRANSFER, &info);
+    mu_assert(strcmp(info.name, "ESPSTRICT") == 0, "v2 transfer name mismatch");
+    mu_assert(info.amount == 500000000ULL, "v2 transfer amount mismatch");
+
+    /* The base renders back to the strict address. */
+    Script base(info.base, info.baseLen);
+    mu_assert(base.type() == P2AUTHSCRIPT_V2, "v2 base type");
+    char addr[100] = {0};
+    base.address(addr, sizeof(addr), &NeuraiTest);
+    mu_assert(strcmp(addr, "tpq1z26xe87v03dum5sugz0h5sdwhur6kftsn9ccl9f6agsdp7atcgyaqdex2vu") == 0, "v2 base address");
+}
+
+MU_TEST(test_encode_strict_authscript_scripts) {
+    size_t bl3 = hx(BASE_V3, bufBase, sizeof(bufBase));
+    size_t n = assetEncodeIssueScript(bufBase, bl3, "ESPSTRICT", 100000000000ULL, 0, true,
+                                      NULL, 0, bufEnc, sizeof(bufEnc), ASSET_MARKER_XNA);
+    eqHex(bufEnc, n, NODE_V3_ISSUE, "encode issue on OP_3 base");
+    n = assetEncodeOwnerScript(bufBase, bl3, "ESPSTRICT!", bufEnc, sizeof(bufEnc), ASSET_MARKER_XNA);
+    eqHex(bufEnc, n, NODE_V3_OWNER, "encode owner on OP_3 base");
+    n = assetEncodeNullTagScript(bufBase, bl3, "#ESPTAG", true, bufEnc, sizeof(bufEnc));
+    eqHex(bufEnc, n, NODE_V3_NULL_TAG, "encode null tag on OP_3 destination");
+
+    size_t bl2 = hx(BASE_V2, bufBase, sizeof(bufBase));
+    n = assetEncodeTransferScript(bufBase, bl2, "ESPSTRICT", 500000000ULL, bufEnc, sizeof(bufEnc),
+                                  ASSET_MARKER_XNA);
+    eqHex(bufEnc, n, NODE_V2_TRANSFER, "encode transfer on OP_2 base");
+}
+
+MU_TEST(test_parse_strict_null_tag) {
+    AssetInfo info;
+    size_t sl = hx(NODE_V3_NULL_TAG, bufScript, sizeof(bufScript));
+    mu_assert(assetParseScript(bufScript, sl, &info), "parse v3 null tag");
+    mu_assert(info.op == ASSET_NULL_TAG, "v3 null tag op");
+    mu_assert(info.witnessVersion == 3, "v3 null tag witness version");
+    mu_assert(info.baseLen == 32, "v3 null tag commitment length");
+    mu_assert(memcmp(info.base, bufScript + 3, 32) == 0, "v3 null tag commitment");
+    mu_assert(strcmp(info.name, "#ESPTAG") == 0, "v3 null tag name");
+    mu_assert(info.flag == 1, "v3 null tag flag");
+
+    /* A P2PKH destination reports witness version 0. */
+    sl = hx("c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60604234b594301", bufScript, sizeof(bufScript));
+    mu_assert(assetParseScript(bufScript, sl, &info), "parse legacy null tag");
+    mu_assert(info.witnessVersion == 0, "legacy null tag witness version");
+}
+
+MU_TEST(test_build_to_strict_addresses) {
+    Tx tx;
+    mu_assert(assetBuildTransfer(tx, "tpq1z26xe87v03dum5sugz0h5sdwhur6kftsn9ccl9f6agsdp7atcgyaqdex2vu",
+                                 "ESPSTRICT", 500000000ULL, ASSET_MARKER_XNA), "build transfer to tpq1z");
+    const Script & spk = tx.txOuts[tx.outputsNumber - 1].scriptPubkey;
+    eqHex(spk.scriptArray, spk.scriptLen, NODE_V2_TRANSFER, "builder transfer to tpq1z");
+
+    Tx tag;
+    const char * targets[1] = { "tnq1rskqpx9d5ccaj8eplrz7rlp9ds5w9wpppmqgenvmzeflmlme8p6yqgl0c8d" };
+    mu_assert(assetAddNullTagOutput(tag, targets[0], "#ESPTAG", true), "tag output to tnq1r");
+    const Script & t = tag.txOuts[0].scriptPubkey;
+    eqHex(t.scriptArray, t.scriptLen, NODE_V3_NULL_TAG, "builder tag to tnq1r");
+}
+
 MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_transfer_p2pkh_mainnet);
     MU_RUN_TEST(test_transfer_p2pkh_testnet);
@@ -755,6 +839,10 @@ MU_TEST_SUITE(test_assets) {
     MU_RUN_TEST(test_build_with_xna_marker);
     MU_RUN_TEST(test_name_validation);
     MU_RUN_TEST(test_name_length_limits);
+    MU_RUN_TEST(test_parse_strict_authscript_bases);
+    MU_RUN_TEST(test_encode_strict_authscript_scripts);
+    MU_RUN_TEST(test_parse_strict_null_tag);
+    MU_RUN_TEST(test_build_to_strict_addresses);
 }
 
 int main(int argc, char *argv[]) {

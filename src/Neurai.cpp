@@ -1,6 +1,7 @@
 #include "Neurai.h"
 #include "Hash.h"
 #include "Conversion.h"
+#include "NeuraiPQ.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -330,6 +331,27 @@ String PublicKey::legacyAddress(const ChainNetwork * network) const{
     return String(addr);
 }
 #endif
+int PublicKey::ecdsaAddress(char * address, size_t len, const ChainNetwork * network) const{
+    if(address == NULL || len == 0){
+        return 0;
+    }
+    memzero(address, len);
+    /* The strict ECDSA family commits to the compressed key only. */
+    PublicKey compressedKey = *this;
+    compressedKey.compressed = true;
+    uint8_t sec_arr[33] = { 0 };
+    if(compressedKey.sec(sec_arr, sizeof(sec_arr)) != 33){
+        return 0;
+    }
+    return (int)ecdsaAddressFromPubKey(sec_arr, chainNetworkIsTestnet(network), address, len);
+}
+#if USE_ARDUINO_STRING || USE_STD_STRING
+String PublicKey::ecdsaAddress(const ChainNetwork * network) const{
+    char addr[UNEURAI_AUTHSCRIPT_ADDRESS_MAX] = { 0 };
+    ecdsaAddress(addr, sizeof(addr), network);
+    return String(addr);
+}
+#endif
 Script PublicKey::script(ScriptType type) const{
     return Script(*this, type);
 }
@@ -468,12 +490,18 @@ int PrivateKey::address(char * address, size_t len) const{
 int PrivateKey::legacyAddress(char * address, size_t len) const{
     return pubKey.legacyAddress(address, len, network);
 }
+int PrivateKey::ecdsaAddress(char * address, size_t len) const{
+    return pubKey.ecdsaAddress(address, len, network);
+}
 #if USE_ARDUINO_STRING || USE_STD_STRING
 String PrivateKey::address() const{
     return pubKey.address(network);
 }
 String PrivateKey::legacyAddress() const{
     return pubKey.legacyAddress(network);
+}
+String PrivateKey::ecdsaAddress() const{
+    return pubKey.ecdsaAddress(network);
 }
 #endif
 

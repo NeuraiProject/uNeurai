@@ -1,6 +1,8 @@
 // all known networks
+#include <stddef.h>
 #include "Networks.h"
 
+/* Legacy P2PKH, m/44'/1900'/… (neurai-key 5: "xna-legacy"). */
 const ChainNetwork Neurai = {
     0x35, // p2pkh
     0x75, // p2sh
@@ -19,6 +21,8 @@ const ChainNetwork Neurai = {
     1900 // bip32 coin type
 };
 
+/* Legacy P2PKH with the historical coin type 0, m/44'/0'/…
+ * (neurai-key 5: "xna-old-legacy"). */
 const ChainNetwork NeuraiLegacy = {
     0x35, // p2pkh
     0x75, // p2sh
@@ -37,6 +41,7 @@ const ChainNetwork NeuraiLegacy = {
     0 // bip32 coin type for legacy targets
 };
 
+/* Testnet / regtest Legacy P2PKH, m/44'/1'/… (neurai-key 5: "xna-legacy-test"). */
 const ChainNetwork NeuraiTest = {
     0x7f, // p2pkh
     0xc4, // p2sh
@@ -57,3 +62,9 @@ const ChainNetwork NeuraiTest = {
 
 const ChainNetwork * networks[3] = { &Neurai, &NeuraiLegacy, &NeuraiTest };
 const uint8_t networks_len = 3;
+
+bool chainNetworkIsTestnet(const ChainNetwork * network){
+    return network != NULL
+        && network->p2pkh == NeuraiTest.p2pkh
+        && network->wif == NeuraiTest.wif;
+}

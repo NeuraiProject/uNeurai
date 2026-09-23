@@ -41,11 +41,26 @@ typedef struct {
     uint32_t bip32;
 } ChainNetwork;
 
+/*
+ * Base58 P2PKH networks. Mapping to the @neuraiproject/neurai-key 5 network names:
+ *   Neurai       -> "xna-legacy"      (m/44'/1900'/…)
+ *   NeuraiLegacy -> "xna-old-legacy"  (m/44'/0'/…, historical coin type 0)
+ *   NeuraiTest   -> "xna-legacy-test" (m/44'/1'/…, also used on regtest)
+ * neurai-key 5 "xna" / "xna-test" are the strict ECDSA witness v3 addresses
+ * (nq1r… / tnq1r…) of the same secp256k1 keys at m/84'/…: see
+ * PublicKey::ecdsaAddress() and NeuraiPQ.h. The AuthScript families (nc/pq/nq
+ * HRPs) are not described by ChainNetwork; its `bech32` field stays empty.
+ */
 extern const ChainNetwork Neurai;
 extern const ChainNetwork NeuraiLegacy;
 extern const ChainNetwork NeuraiTest;
 extern const ChainNetwork * networks[];
 extern const uint8_t networks_len;
+
+/** \brief True for the testnet / regtest parameters (NeuraiTest prefixes),
+ *         false for mainnet (Neurai, NeuraiLegacy). Used to pick the
+ *         mainnet or testnet HRP of the AuthScript address families. */
+bool chainNetworkIsTestnet(const ChainNetwork * network);
 
 // default network for the application
 #ifndef DEFAULT_NETWORK

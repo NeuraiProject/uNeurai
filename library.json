@@ -1,7 +1,7 @@
 {
   "name": "uNeurai",
-  "version": "0.0.11",
-  "description": "Brings Neurai to embedded devices. Write your own hardware wallet, vending machine or any other neurai-powered device. Supports public and private keys, HD wallets, transactions, scripts and Neurai assets (issue, transfer and manage). Optional Post-Quantum support (ML-DSA-44, NIP-022) when built with -DUNEURAI_ENABLE_PQ and the mldsa-esp32 library installed alongside.",
+  "version": "0.2.0",
+  "description": "Brings Neurai to embedded devices. Write your own hardware wallet, vending machine or any other neurai-powered device. Supports public and private keys, HD wallets, transactions, scripts, every Neurai address type (Legacy P2PKH and the AuthScript families nc1p/pq1z/nq1r) and Neurai assets (issue, transfer and manage). Optional Post-Quantum support (ML-DSA-44, NIP-022) when built with -DUNEURAI_ENABLE_PQ and the mldsa-esp32 library installed alongside.",
   "keywords": "neurai, cryptography, xna, assets, post-quantum, ml-dsa",
   "repository": {
     "type": "git",

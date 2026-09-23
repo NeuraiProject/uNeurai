@@ -17,9 +17,18 @@ MU_TEST(test_networks_prefixes) {
     mu_assert_int_eq(0xef, NeuraiTest.wif);
 }
 
+/* Mainnet / testnet selector for the AuthScript HRPs (nc|tnc, pq|tpq, nq|tnq). */
+MU_TEST(test_networks_testnet_flag) {
+    mu_check(!chainNetworkIsTestnet(&Neurai));
+    mu_check(!chainNetworkIsTestnet(&NeuraiLegacy));
+    mu_check(chainNetworkIsTestnet(&NeuraiTest));
+    mu_check(!chainNetworkIsTestnet(NULL));
+}
+
 MU_TEST_SUITE(test_suite) {
     MU_RUN_TEST(test_networks_params);
     MU_RUN_TEST(test_networks_prefixes);
+    MU_RUN_TEST(test_networks_testnet_flag);
 }
 
 int main(int argc, char *argv[]) {

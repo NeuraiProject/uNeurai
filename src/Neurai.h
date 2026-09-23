@@ -49,8 +49,13 @@ enum ScriptType{
     P2SH_P2WPKH,
     P2SH_P2WSH,
     MULTISIG,
-    /** \brief Witness v1 AuthScript: OP_1 <32-byte commitment> (Neurai PQ) */
-    P2AUTHSCRIPT
+    /** \brief Generic AuthScript witness v1: OP_1 <32-byte commitment>
+     *         (nc1p… / tnc1p…, used by the phase-1 PQ flow) */
+    P2AUTHSCRIPT,
+    /** \brief Strict PQ witness v2: OP_2 <32-byte commitment> (pq1z… / tpq1z…) */
+    P2AUTHSCRIPT_V2,
+    /** \brief Strict ECDSA witness v3: OP_3 <32-byte commitment> (nq1r… / tnq1r…) */
+    P2AUTHSCRIPT_V3
 };
 
 /** \brief SigHash types */
@@ -132,6 +137,21 @@ public:
     std::string address(const ChainNetwork * network = &DEFAULT_NETWORK) const{ return legacyAddress(network); };
 #endif
     /**
+     *  \brief Fills `addr` with the strict ECDSA witness v3 address of the key
+     *         (Bech32m `nq1r…` on mainnet, `tnq1r…` on NeuraiTest / regtest).
+     *         Always commits to the compressed key. neurai-key 5 derives it at
+     *         m/84'/1900'/account'/change/index (network "xna"). Only usable
+     *         where the node activated the strict families (see NeuraiPQ.h).
+     *         Returns the address length, 0 on error.
+     */
+    int ecdsaAddress(char * addr, size_t len, const ChainNetwork * network = &DEFAULT_NETWORK) const;
+#if USE_ARDUINO_STRING
+    String ecdsaAddress(const ChainNetwork * network = &DEFAULT_NETWORK) const;
+#endif
+#if USE_STD_STRING
+    std::string ecdsaAddress(const ChainNetwork * network = &DEFAULT_NETWORK) const;
+#endif
+    /**
      *  \brief verifies the ECDSA signature of the hash of the message
      */
     bool verify(const Signature sig, const uint8_t hash[32]) const;
@@ -192,13 +212,17 @@ public:
     int address(char * address, size_t len) const;
     /** \brief Alias for .publicKey().legacyAddress(network) */
     int legacyAddress(char * address, size_t len) const;
+    /** \brief Alias for .publicKey().ecdsaAddress(network) (strict ECDSA witness v3) */
+    int ecdsaAddress(char * address, size_t len) const;
 #if USE_ARDUINO_STRING
     String address() const;
     String legacyAddress() const;
+    String ecdsaAddress() const;
 #endif
 #if USE_STD_STRING
     std::string address() const;
     std::string legacyAddress() const;
+    std::string ecdsaAddress() const;
 #endif
 //    PrivateKey &operator=(const PrivateKey &other);                   // assignment
     /** \brief Performs ECDH key agreement using public key of another party.
@@ -448,7 +472,8 @@ public:
     /** \brief creates a script from address */
     Script(const std::string address){ init(); fromAddress(address.c_str()); };
 #endif
-    /** \brief creates one of standart scripts (P2PKH, P2WPKH) */
+    /** \brief creates one of standart scripts (P2PKH, P2WPKH, or P2AUTHSCRIPT_V3
+     *         for the strict ECDSA witness v3 output of the compressed key) */
     Script(const PublicKey pubkey, ScriptType type = P2PKH);
     /** \brief creates one of standart scripts (P2SH, P2WSH) */
     Script(const Script &other, ScriptType type);
@@ -457,9 +482,17 @@ public:
 
     /** \brief tries to determine the script type */
     ScriptType type() const;
-    /** \brief returns address corresponding to the script */
+    /** \brief witness version (1, 2 or 3) of an AuthScript output script
+     *         (P2AUTHSCRIPT, P2AUTHSCRIPT_V2, P2AUTHSCRIPT_V3), 0 otherwise */
+    uint8_t authScriptVersion() const;
+    /** \brief returns address corresponding to the script.
+     *         AuthScript outputs (v1/v2/v3) render as nc1p… / pq1z… / nq1r…
+     *         (tnc1p… / tpq1z… / tnq1r… on NeuraiTest). */
     size_t address(char * buffer, size_t len, const ChainNetwork * network = &DEFAULT_NETWORK) const;
-    /** \brief returns PQ address (P2AUTHSCRIPT only); returns 0 for other types */
+    /** \brief returns the address of an AuthScript output (v1, v2 or v3; 0 for
+     *         other types). The family HRP follows the script's witness
+     *         version; `network` only selects mainnet or testnet
+     *         (e.g. &NeuraiPQTest renders a v3 output as tnq1r…). */
     size_t address(char * buffer, size_t len, const ChainNetworkPQ * network) const;
 #if USE_ARDUINO_STRING
     String address(const ChainNetwork * network = &DEFAULT_NETWORK) const;
@@ -669,13 +702,40 @@ public:
     int hashOutputs(uint8_t h[32]) const;
     int sigHashSegwit(uint8_t h[32], uint8_t inputIndex, const Script scriptPubKey, uint64_t amount, SigHashType sighash = SIGHASH_ALL) const;
 
-    /** \brief BIP-143-style sighash for Neurai AuthScript inputs (witness v1).
+    /** \brief BIP-143-style sighash for generic Neurai AuthScript inputs (witness v1).
      *         Differs from sigHashSegwit only in that an `authType` byte is
-     *         inserted between `locktime` and `hashType` in the preimage. */
+     *         inserted between `locktime` and `hashType` in the preimage.
+     *         Returns 32, or 0 (and zeroes `h`) for an out-of-range input or a
+     *         version-3 transaction (NIP-014 reference inputs are not supported). */
     int sigHashAuthScript(uint8_t h[32], uint8_t inputIndex,
                           const Script witnessScript, uint64_t amount,
                           uint8_t authType,
                           SigHashType sighash = SIGHASH_ALL) const;
+
+    /** \brief Sighash for strict AuthScript inputs: witness v2 (PQ, pq1z…) or
+     *         v3 (ECDSA, nq1r…). Node SIGVERSION_AUTHSCRIPT_STRICT: the
+     *         sigHashAuthScript preimage with scriptCode = OP_TRUE (0x51) and
+     *         the witness version byte written before authType
+     *         (… locktime || witnessVersion || authType || hashType). authType
+     *         is implied (v2 -> 0x01, v3 -> 0x02). A v1-style signature is not
+     *         valid for a strict input and vice versa.
+     *         Returns 32, or 0 for another witness version, an out-of-range
+     *         input or a version-3 transaction. */
+    int sigHashAuthScriptStrict(uint8_t h[32], uint8_t inputIndex,
+                                uint64_t amount, uint8_t witnessVersion,
+                                SigHashType sighash = SIGHASH_ALL) const;
+
+    /** \brief Sign a strict ECDSA witness v3 input (nq1r… / tnq1r…) with a
+     *         secp256k1 key. Fills txIns[inputIndex].witness with the
+     *         consensus template
+     *             [0x02], [DER(sig)||hashType], [compressed pubkey 33 B], [0x51]
+     *         and empties the scriptSig. The prevout must be
+     *         `OP_3 0x20 <ecdsaCommitmentFromPubKey(pubkey)>` (optionally with an
+     *         asset suffix; pass amount 0 for asset-wrapped prevouts).
+     *         Host-compilable (no PQ backend needed). Returns 1 on success. */
+    int signAuthScriptInputECDSA(uint8_t inputIndex, const PrivateKey pk,
+                                 uint64_t amount,
+                                 SigHashType sighash = SIGHASH_ALL);
 
     /** \brief OP_TXHASH digest for an input (Neurai advanced/covenant scripts).
      *
@@ -692,7 +752,8 @@ public:
     int computeOpTxHash(uint8_t selector, uint8_t inputIndex, uint8_t out[32]) const;
 
 #if defined(UNEURAI_ENABLE_PQ) && defined(ARDUINO_ARCH_ESP32)
-    /** \brief Sign an AuthScript witness-v1 input with ML-DSA-44 (authType=0x01).
+    /** \brief Sign a generic AuthScript witness-v1 input (nc1p… / tnc1p…) with
+     *         ML-DSA-44 (authType=0x01).
      *         Replaces scriptSig with empty and fills txIns[inputIndex].witness
      *         with the AuthScript stack:
      *             [authType=0x01], [sig||hashType], [0x05||pqPubKey], [witnessScript]
@@ -708,6 +769,19 @@ public:
                               uint64_t amount,
                               const Script witnessScript,
                               SigHashType sighash = SIGHASH_ALL);
+
+    /** \brief Sign a strict PQ witness v2 input (pq1z… / tpq1z…) with ML-DSA-44.
+     *         Uses sigHashAuthScriptStrict(…, 2, …) and fills the witness with
+     *         the consensus template
+     *             [0x01], [sig||hashType], [0x05||pqPubKey], [0x51]
+     *         (empty scriptSig). The prevout must be
+     *         `OP_2 0x20 <commitment>` built with NeuraiPQV2 / NeuraiPQV2Test.
+     *         Returns 1 on success, 0 on error. ESP32-only (mldsa-esp32). */
+    int signAuthScriptInputPQStrict(uint8_t inputIndex,
+                                    const uint8_t * pqSecretKey,
+                                    const uint8_t * pqPublicKey,
+                                    uint64_t amount,
+                                    SigHashType sighash = SIGHASH_ALL);
 
     /** \brief Sign a Neurai covenant CANCEL input with ML-DSA-44 (NOAUTH).
      *

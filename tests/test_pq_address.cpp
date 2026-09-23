@@ -1,6 +1,7 @@
 #ifdef UXNA_TEST
 
-/* PQ address encode/decode against the JS oracle (vectors.json). */
+/* PQ address encode/decode against the JS oracle (vectors.json), re-encoded
+ * with the node's HRP / witness-version pairs (nc/tnc v1, pq/tpq v2). */
 
 #include <string.h>
 #include "minunit.h"
@@ -58,21 +59,61 @@ static const char ORACLE_PUBKEY_HEX[] =
     "8febfadcaa9e93077f610c011bde026aad266cfe5d58f09a0ba19739ffc1b661"
     "f6bce088971d95fcbdb063e0229cc4238aebebf7d5ccfd9c7e24e4b73f5d51e";
 
+/* Generic AuthScript v1 (authType 0x01, witnessScript OP_TRUE). The node's
+ * validateaddress returns scriptPubKey 5120<EXPECTED_COMMITMENT> for it. */
 static const char EXPECTED_ADDRESS[] =
-    "tnq1pdsj0aztvgwv3rwgml360stpyp228zrggyga6n4sdenmetm6wv3tqzddk95";
+    "tnc1pdsj0aztvgwv3rwgml360stpyp228zrggyga6n4sdenmetm6wv3tqse52vk";
+
+static const char EXPECTED_ADDRESS_MAINNET[] =
+    "nc1pdsj0aztvgwv3rwgml360stpyp228zrggyga6n4sdenmetm6wv3tq3qxdae";
 
 static const char EXPECTED_COMMITMENT[] =
     "6c24fe896c439911b91bfc74f82c240a94710d08223ba9d60dccf795ef4e6456";
 
-MU_TEST(test_address_from_oracle_pubkey){
-    uint8_t pk[UNEURAI_PQ_PUBKEY_RAW_LEN];
+/* The same program in the pre-0.1.0 encoding (HRP "tnq", witness v1): the
+ * node rejects it, and so does the library. */
+static const char OLD_ADDRESS[] =
+    "tnq1pdsj0aztvgwv3rwgml360stpyp228zrggyga6n4sdenmetm6wv3tqzddk95";
+
+/* Strict PQ v2 of the same key: witness version 2 as commitment lead byte. */
+static const char EXPECTED_V2_ADDRESS[] =
+    "tpq1zxsjnzvjnwn7vt04nkx6qthvylqwej33r53duxawl0uwd3ewme4nsy38hld";
+
+static const char EXPECTED_V2_COMMITMENT[] =
+    "342531325374fcc5beb3b1b405dd84f81d994623a45bc375df7f1cd8e5dbcd67";
+
+static uint8_t pk[UNEURAI_PQ_PUBKEY_RAW_LEN];
+
+static void loadPk(){
     size_t pkLen = fromHex(ORACLE_PUBKEY_HEX, sizeof(ORACLE_PUBKEY_HEX) - 1, pk, sizeof(pk));
     mu_assert_int_eq(UNEURAI_PQ_PUBKEY_RAW_LEN, (int)pkLen);
+}
+
+MU_TEST(test_address_from_oracle_pubkey){
+    loadPk();
 
     char addr[100] = {0};
     size_t l = pqAddressFromPubKey(&NeuraiPQTest, pk, addr, sizeof(addr));
     mu_assert_int_eq((int)strlen(EXPECTED_ADDRESS), (int)l);
     mu_assert_string_eq(EXPECTED_ADDRESS, addr);
+
+    l = pqAddressFromPubKey(&NeuraiPQ, pk, addr, sizeof(addr));
+    mu_assert_int_eq((int)strlen(EXPECTED_ADDRESS_MAINNET), (int)l);
+    mu_assert_string_eq(EXPECTED_ADDRESS_MAINNET, addr);
+}
+
+MU_TEST(test_v2_address_from_oracle_pubkey){
+    loadPk();
+
+    char addr[100] = {0};
+    size_t l = pqAddressFromPubKey(&NeuraiPQV2Test, pk, addr, sizeof(addr));
+    mu_assert_int_eq((int)strlen(EXPECTED_V2_ADDRESS), (int)l);
+    mu_assert_string_eq(EXPECTED_V2_ADDRESS, addr);
+
+    uint8_t commitment[32];
+    mu_assert_int_eq(1, pqAddressDecode(EXPECTED_V2_ADDRESS, &NeuraiPQV2Test, commitment));
+    string got = toHex(commitment, 32);
+    mu_assert_string_eq(EXPECTED_V2_COMMITMENT, got.c_str());
 }
 
 MU_TEST(test_address_decode_matches_commitment){
@@ -85,10 +126,20 @@ MU_TEST(test_address_decode_matches_commitment){
 }
 
 MU_TEST(test_address_decode_wrong_network_fails){
-    /* tnq1... must NOT decode under the mainnet "nq" HRP. */
+    /* tnc1... must NOT decode under the mainnet "nc" HRP, nor as strict v2. */
     uint8_t commitment[32];
     int ok = pqAddressDecode(EXPECTED_ADDRESS, &NeuraiPQ, commitment);
     mu_assert_int_eq(0, ok);
+    ok = pqAddressDecode(EXPECTED_ADDRESS, &NeuraiPQV2Test, commitment);
+    mu_assert_int_eq(0, ok);
+}
+
+MU_TEST(test_old_encoding_rejected){
+    uint8_t commitment[32];
+    mu_assert_int_eq(0, pqAddressDecode(OLD_ADDRESS, &NeuraiPQTest, commitment));
+    mu_assert_int_eq(0, authScriptAddressDecode(OLD_ADDRESS, NULL, NULL, commitment));
+    Script s(OLD_ADDRESS);
+    mu_assert_int_eq(0, (int)s.scriptLen);
 }
 
 MU_TEST(test_script_round_trip_pq){
@@ -101,12 +152,20 @@ MU_TEST(test_script_round_trip_pq){
     size_t l = s.address(back, sizeof(back), &NeuraiPQTest);
     mu_assert_int_eq((int)strlen(EXPECTED_ADDRESS), (int)l);
     mu_assert_string_eq(EXPECTED_ADDRESS, back);
+
+    Script s2(EXPECTED_V2_ADDRESS);
+    mu_check(s2.type() == P2AUTHSCRIPT_V2);
+    l = s2.address(back, sizeof(back), &NeuraiPQV2Test);
+    mu_assert_int_eq((int)strlen(EXPECTED_V2_ADDRESS), (int)l);
+    mu_assert_string_eq(EXPECTED_V2_ADDRESS, back);
 }
 
 MU_TEST_SUITE(test_suite){
     MU_RUN_TEST(test_address_from_oracle_pubkey);
+    MU_RUN_TEST(test_v2_address_from_oracle_pubkey);
     MU_RUN_TEST(test_address_decode_matches_commitment);
     MU_RUN_TEST(test_address_decode_wrong_network_fails);
+    MU_RUN_TEST(test_old_encoding_rejected);
     MU_RUN_TEST(test_script_round_trip_pq);
 }
 
