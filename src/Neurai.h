@@ -739,17 +739,17 @@ public:
 
     /** \brief OP_TXHASH digest for an input (Neurai advanced/covenant scripts).
      *
-     *  Serializes the transaction fields selected by the 8-bit `selector`
-     *  (ascending bit order) and returns their double-SHA256:
-     *      0x01 version(4 LE)              0x10 hash256(all outputs)
-     *      0x02 locktime(4 LE)            0x20 current prevout (txid32||index4 LE)
-     *      0x04 hash256(all prevouts)     0x40 current sequence(4 LE)
-     *      0x08 hash256(all sequences)    0x80 current input index(4 LE)
+     *  NIP-042 uses a nonzero 9-bit selector encoded as two LE bytes.
+     *  Returns SHA256(tag || tag || maskLE16 || selected fields), where
+     *  tag = SHA256("NeuraiTxHash"). Bits 0..7 select version, locktime,
+     *  aggregate prevouts/sequences/outputs and current input fields;
+     *  bit 8 commits reference outpoints. This library has no vrefin support:
+     *  bit 8 contributes hash256(empty) on v2 and rejects v3.
      *
      *  Pure tx serialization + hashing (no key material), so it is available on
      *  host too — useful for parity tests against neurai-sign-transaction.
      *  Writes 32 bytes to `out`; returns 32 on success, 0 on error. */
-    int computeOpTxHash(uint8_t selector, uint8_t inputIndex, uint8_t out[32]) const;
+    int computeOpTxHash(uint16_t selector, uint8_t inputIndex, uint8_t out[32]) const;
 
 #if defined(UNEURAI_ENABLE_PQ) && defined(ARDUINO_ARCH_ESP32)
     /** \brief Sign a generic AuthScript witness-v1 input (nc1p… / tnc1p…) with
@@ -794,13 +794,13 @@ public:
      *
      *  `covenantScript` MUST be the exact script the covenant UTXO commits to
      *  (commitment = buildAuthScriptCommitment(NOAUTH, NULL, 0, covenantScript)).
-     *  `txHashSelector` is the 1-byte OP_TXHASH selector embedded in that script.
+     *  `txHashSelector` is the two-byte LE NIP-042 mask embedded in that script.
      *  Always uses SIGHASH_ALL. Returns 1 on success, 0 on error. ESP32-only. */
     int signCovenantCancelInputPQ(uint8_t inputIndex,
                                   const uint8_t * pqSecretKey,
                                   const uint8_t * pqPublicKey,
                                   const Script covenantScript,
-                                  uint8_t txHashSelector);
+                                  uint16_t txHashSelector);
 #endif
 
 #if 0

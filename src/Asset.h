@@ -18,7 +18,7 @@
  *   NIP-040 (asset marker migration): historic outputs carry the Ravencoin
  *   marker "rvn"; from the activation height the node only accepts "xna" on
  *   new outputs and rejects "rvn" (bad-txns-legacy-asset-marker-after-nip040).
- *   Testnet activated at block 303000; mainnet has no scheduled height yet.
+ *   Reset testnet activates at block 10; mainnet has no scheduled height yet.
  *   The parser accepts BOTH markers (legacy UTXOs stay valid and spendable) and
  *   reports which one it found in AssetInfo.marker. The encoders take an
  *   explicit AssetMarker; this library never infers it from the network — the
@@ -42,7 +42,7 @@
  * asset payload, followed by the op letter. */
 enum AssetMarker {
     ASSET_MARKER_RVN = 0,   /* "rvn": legacy (Ravencoin) marker, mainnet today  */
-    ASSET_MARKER_XNA = 1    /* "xna": NIP-040 marker, testnet since block 303000 */
+    ASSET_MARKER_XNA = 1    /* "xna": NIP-040 marker, reset testnet from block 10 */
 };
 #define ASSET_MARKER_DEFAULT ASSET_MARKER_RVN
 

@@ -699,16 +699,29 @@ int Tx::hashOutputs(uint8_t h[32]) const{
     return 32;
 }
 
-int Tx::computeOpTxHash(uint8_t selector, uint8_t inputIndex, uint8_t out[32]) const{
-    if(inputIndex >= inputsNumber){ memset(out, 0, 32); return 0; }
+int Tx::computeOpTxHash(uint16_t selector, uint8_t inputIndex, uint8_t out[32]) const{
+    if(selector == 0 || (selector & ~uint16_t(0x01ff)) || inputIndex >= inputsNumber){
+        memset(out, 0, 32);
+        return 0;
+    }
+    /* Tx currently cannot serialize NIP-014 reference inputs. Refuse a v3
+     * bit-8 digest rather than signing an incomplete reference list. */
+    if(version == 3 && (selector & 0x0100)){
+        memset(out, 0, 32);
+        return 0;
+    }
 
-    DoubleSha s;
+    uint8_t tag[32];
+    sha256("NeuraiTxHash", 12, tag);
+    SHA256 s;
     s.begin();
+    s.write(tag, 32);
+    s.write(tag, 32);
     uint8_t arr[36];
     uint8_t sub[32];
+    intToLittleEndian(selector, arr, 2);
+    s.write(arr, 2);
 
-    /* Concatenate the selected field contributions in ascending bit order,
-     * then double-SHA256 the lot (mirrors neurai-sign-transaction computeOpTxHash). */
     if(selector & 0x01){ intToLittleEndian(version, arr, 4); s.write(arr, 4); }
     if(selector & 0x02){ intToLittleEndian(locktime, arr, 4); s.write(arr, 4); }
     if(selector & 0x04){ hashPrevouts(sub); s.write(sub, 32); }
@@ -721,6 +734,11 @@ int Tx::computeOpTxHash(uint8_t selector, uint8_t inputIndex, uint8_t out[32]) c
     }
     if(selector & 0x40){ intToLittleEndian(txIns[inputIndex].sequence, arr, 4); s.write(arr, 4); }
     if(selector & 0x80){ intToLittleEndian((uint64_t)inputIndex, arr, 4); s.write(arr, 4); }
+    if(selector & 0x0100){
+        const uint8_t empty = 0;
+        doubleSha(&empty, 0, sub);
+        s.write(sub, 32);
+    }
 
     s.end(out);
     return 32;
@@ -1060,13 +1078,13 @@ int Tx::signCovenantCancelInputPQ(uint8_t inputIndex,
                                   const uint8_t * pqSecretKey,
                                   const uint8_t * pqPublicKey,
                                   const Script covenantScript,
-                                  uint8_t txHashSelector){
+                                  uint16_t txHashSelector){
     if(pqSecretKey == NULL || pqPublicKey == NULL) return 0;
     if(inputIndex >= inputsNumber) return 0;
     if(covenantScript.scriptArray == NULL || covenantScript.scriptLen == 0) return 0;
 
     /* 1. message = sha256(computeOpTxHash(selector, inputIndex)).
-     *    OP_TXHASH leaves hash256(selected fields) on the stack; the covenant's
+     *    OP_TXHASH leaves the NIP-042 tagged digest on the stack; the covenant's
      *    OP_CHECKSIGFROMSTACK applies one more SHA-256 to the message item before
      *    ML-DSA verification, so we pre-hash exactly once here. */
     uint8_t opTxHash[32];

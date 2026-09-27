@@ -284,27 +284,16 @@ size_t ecdsaAddressFromPubKey(const uint8_t pubkey[33], bool testnet,
 }
 
 int parseCovenantPQTxHashSelector(const uint8_t *script, size_t len,
-                                  uint8_t *outSelector){
+                                  uint16_t *outSelector){
     if(script == NULL || outSelector == NULL) return 0;
-    /* Fixed cancel-branch prefix: OP_IF OP_DUP OP_SHA256 0x20 <32> OP_EQUALVERIFY. */
-    if(len < 39) return 0;                 /* prefix(37) + at least a 2-byte push */
-    if(script[0]  != 0x63) return 0;       /* OP_IF        */
-    if(script[1]  != 0x76) return 0;       /* OP_DUP       */
-    if(script[2]  != 0xa8) return 0;       /* OP_SHA256    */
-    if(script[3]  != 0x20) return 0;       /* push 32      */
-    if(script[36] != 0x88) return 0;       /* OP_EQUALVERIFY */
-
-    const uint8_t op = script[37];
-    uint8_t sel;
-    if(op >= 0x51 && op <= 0x60){          /* OP_1..OP_16 -> 1..16 */
-        sel = (uint8_t)(op - 0x51 + 1);
-    }else if(op == 0x01){                  /* 1-byte data push */
-        sel = script[38];
-    }else{
-        return 0;
-    }
-    if(sel == 0) return 0;                 /* OP_TXHASH rejects selector 0 */
-    *outSelector = sel;
+    /* OP_IF OP_DUP OP_SHA256 <32-byte commitment> OP_EQUALVERIFY. */
+    if(len < 41) return 0;
+    if(script[0] != 0x63 || script[1] != 0x76 || script[2] != 0xa8 ||
+       script[3] != 0x20 || script[36] != 0x88) return 0;
+    if(script[37] != 0x02 || script[40] != 0xb5) return 0;
+    const uint16_t selector = uint16_t(script[38]) | (uint16_t(script[39]) << 8);
+    if(selector == 0 || (selector & ~uint16_t(0x01ff))) return 0;
+    *outSelector = selector;
     return 1;
 }
 

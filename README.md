@@ -11,6 +11,18 @@ The library should work on any decent 32-bit microcontroller, like esp32, riscV,
 
 We use elliptic curve implementation from [trezor-crypto](https://github.com/trezor/trezor-firmware/tree/master/crypto). API is inspired by [Jimmy Song's](https://github.com/jimmysong/) Porgramming Blockchain class and the [book](https://github.com/jimmysong/programmingbitcoin).
 
+## NIP-042 covenant signing (0.3.0 preparation)
+
+`Tx::computeOpTxHash()` now accepts a 16-bit mask and produces the
+`NeuraiTxHash` tagged digest used by the reset testnet node. PQ covenant
+selectors must be pushed as exactly two little-endian bytes; the selector
+parser rejects historical one-byte scripts. Bit 8 contributes the hash of an
+empty reference list for version-2 transactions. Version-3 transactions with
+reference inputs remain unsupported by this library, so a version-3 bit-8
+request fails rather than signing an incomplete digest. The host tests include
+NIP-042 vectors; ESP32 signing still requires a device test with the optional
+ML-DSA-44 backend.
+
 ## Documentation
 
 In progress.
@@ -56,8 +68,8 @@ byte of the preimage, so one key has a different program in each family.
   `authScriptAddressDecode()` returns 0.
 - Decoding follows the node: Bech32m first (any case), then Base58, so Base58
   addresses that happen to start with `NQ1` / `Nc1` still decode as P2PKH.
-- **Activation:** the strict families (v2, v3) are active only on regtest for
-  now. Before activation the node refuses `pq1…` / `nq1…` addresses because an
+- **Activation:** all three AuthScript families activate on the reset testnet
+  at block 10 and on regtest at block 1. Before activation the node refuses `pq1…` / `nq1…` addresses because an
   `OP_2` / `OP_3` output is anyone-can-spend there. uNeurai cannot know the
   activation state: do not build outputs to v2/v3 addresses on a chain where
   they are not active.
@@ -392,7 +404,7 @@ UTXOs remain valid and spendable. Status today:
 | Network | Marker for new outputs |
 | --- | --- |
 | Mainnet | `rvn` (no activation height scheduled yet) |
-| Testnet | `xna` (active since block 303000) |
+| Reset testnet | `rvn` in blocks 1-9; `xna` from block 10 |
 
 uNeurai therefore exposes the marker explicitly instead of guessing it from the
 network — exactly like `@neuraiproject/neurai-create-transaction`:

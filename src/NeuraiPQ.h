@@ -223,13 +223,13 @@ size_t ecdsaAddressFromPubKey(const uint8_t pubkey[33], bool testnet,
  * Extract the OP_TXHASH selector from a PQ partial-fill covenant's CANCEL branch.
  * The branch begins with a fixed prefix:
  *   OP_IF OP_DUP OP_SHA256 <push32 pubKeyCommitment> OP_EQUALVERIFY <push selector> OP_TXHASH ...
- * The selector push is either OP_1..OP_16 (values 1..16) or a 1-byte data push.
+ * NIP-042 requires a direct push of exactly two little-endian mask bytes.
  * The device must use the in-script selector (consensus reads it from here), so
  * never trust a host-supplied value. Writes *outSelector and returns 1 on a
  * matching script, 0 otherwise.
  */
 int parseCovenantPQTxHashSelector(const uint8_t *script, size_t len,
-                                  uint8_t *outSelector);
+                                  uint16_t *outSelector);
 
 /*
  * Encode a PQ address from a raw 1312-byte ML-DSA-44 public key, with

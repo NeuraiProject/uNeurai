@@ -6,7 +6,8 @@
  *     witnessScript OP_TRUE) with Tx::signAuthScriptInputPQ — the address
  *     family the NeuraiHW firmware uses today;
  *   - strict PQ witness v2 (tpq1z… / pq1z…) with Tx::signAuthScriptInputPQStrict.
- *     The strict families are only active on regtest for now: do not pay to a
+ *     The strict families activate on the reset testnet at block 10 and on
+ *     regtest at block 1: do not pay to a
  *     pq1z… address on a chain where the node has not activated them.
  *
  * Hardware:    ESP32 (any S2/S3/C3 variant with >=320 KB RAM)

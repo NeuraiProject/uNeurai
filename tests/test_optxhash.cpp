@@ -1,10 +1,7 @@
 #ifdef UXNA_TEST
 
-/* Tx::computeOpTxHash against the neurai-sign-transaction reference.
- *
- * Vectors generated with the library's exact computeOpTxHash/contributionFor
- * helpers over a fixed 2-input / 2-output tx (non-symmetric prevout hashes so a
- * txid byte-order bug would be caught). The C++ port must reproduce them. */
+/* NIP-042 tagged OP_TXHASH vectors over a fixed two-input, two-output tx.
+ * Non-symmetric prevouts catch byte-order errors. */
 
 #include <string.h>
 #include "minunit.h"
@@ -22,15 +19,17 @@ static const char RAW_TX_HEX[] =
     "80b2e60e00000000" "225120bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     "00000000";
 
-struct Vec { uint8_t selector; uint8_t inIndex; const char* opTxHash; };
+struct Vec { uint16_t selector; uint8_t inIndex; const char* opTxHash; };
 
 /* selector bits: 0x01 ver, 0x02 locktime, 0x04 prevouts, 0x08 seqs,
  * 0x10 outputs, 0x20 cur-prevout, 0x40 cur-seq, 0x80 cur-index. */
 static const Vec VECS[] = {
-    { 0xff, 0, "eef6094fd6f561b88fc74c4a3e2f54586f4b7be3507798fee3d6beaa02901343" },
-    { 0xff, 1, "748834e3ebc02cc56f48cf185474ea4a7a554d8e8ce872a8ecffd29f05c9e203" },
-    { 0x14, 0, "42111c4020076c5b60a7d43dbc231a8dba88ea3aa55b278ee278a83e89f4de5c" }, /* prevouts+outputs */
-    { 0xb6, 0, "2f0977a154a7da040fef547cbb508c2902d02338698a258af2a3dad89a63200b" }, /* mixed */
+    { 0xff, 0, "d0c5af47ae557e7db9878285b60e2ebd32d927e4a5a57717b20fbdca9152477f" },
+    { 0xff, 1, "1d480819fffac23d97267a97e466999f51e1104b7e9b046ac1459a47e909564d" },
+    { 0x14, 0, "b2ec8ac862dd2337ad5d527ae4992e492ba5c24880ac4420db97c00f25d13851" },
+    { 0xb6, 0, "2b2d29fe03ceb18c526ddf3f0758dd0a2c8b245e5103b1108601dfebc462e824" },
+    { 0x1ff, 0, "a2e385830de2b580072b164675333992b32211b7fd0ca7eca5e14fb6a41682f0" },
+    { 0x100, 0, "308542cb639a0e6ac414070f3be7c7e13827c7dde337c4d1202853376519fab1" },
 };
 
 MU_TEST(test_optxhash_matches_oracle){
@@ -65,9 +64,20 @@ MU_TEST(test_optxhash_selector_changes_digest){
     mu_check(memcmp(a, b, 32) != 0);
 }
 
+MU_TEST(test_optxhash_rejects_reserved_masks){
+    uint8_t txBytes[256];
+    size_t txLen = fromHex(RAW_TX_HEX, sizeof(RAW_TX_HEX) - 1, txBytes, sizeof(txBytes));
+    Tx tx;
+    mu_check(tx.parse(txBytes, txLen) > 0);
+    uint8_t digest[32];
+    mu_assert_int_eq(0, tx.computeOpTxHash(0, 0, digest));
+    mu_assert_int_eq(0, tx.computeOpTxHash(0x200, 0, digest));
+}
+
 MU_TEST_SUITE(test_suite){
     MU_RUN_TEST(test_optxhash_matches_oracle);
     MU_RUN_TEST(test_optxhash_selector_changes_digest);
+    MU_RUN_TEST(test_optxhash_rejects_reserved_masks);
 }
 
 int main(int argc, char *argv[]){
