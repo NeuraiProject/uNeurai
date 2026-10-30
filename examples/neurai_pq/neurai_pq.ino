@@ -97,10 +97,12 @@ static void cryptoTask(void *arg){
     tx.version = 2;
     tx.locktime = 0;
 
-    /* Fake UTXO: prev txid = 0x11..11, vout = 0, amount = 1 XNA, RBF sequence. */
+    /* Fake UTXO: prev txid = 0x11..11, vout = 0, amount = 1 XNA. The sequence
+     * must not signal BIP 125 replaceability: nodes reject 0xfffffffd and other
+     * RBF signals (bad-txns-rbf-sequence), so use 0xfffffffe or 0xffffffff. */
     uint8_t prevTxid[32];
     memset(prevTxid, 0x11, sizeof(prevTxid));
-    TxIn in(prevTxid, 0, /*sequence*/ 0xfffffffdU);
+    TxIn in(prevTxid, 0, /*sequence*/ 0xfffffffeU);
     tx.addInput(in);
 
     /* Output: send 0.9999 XNA to a P2PKH placeholder (20 bytes 0xab). */

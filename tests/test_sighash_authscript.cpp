@@ -73,7 +73,9 @@ MU_TEST(test_sighash_authscript_differs_from_segwit){
 /* ---------------------------- Node-accepted spends ---------------------------- */
 
 /* Each unsigned tx spends one 10 XNA regtest output (vout 1) to the generic v1
- * address tnc1pvjuphw…, version 2, sequence 0xfffffffd, locktime 0. */
+ * address tnc1pvjuphw…, version 2, sequence 0xfffffffd, locktime 0. They are
+ * kept as signing vectors only: since the no-RBF sequence rule a node rejects
+ * sequence 0xfffffffd (bad-txns-rbf-sequence). */
 static const uint64_t PREVOUT_AMOUNT = 1000000000ULL;
 
 /* v1 PQ prevout 51205ea4ce2f…e736 (tnc1pt6jvut…): signed with

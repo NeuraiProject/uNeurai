@@ -28,7 +28,9 @@ static const char ORACLE_V2_ADDRESS[] =
 
 /* A strict PQ v2 spend signed by signAuthScriptInputPQStrict with the key of
  * a regtest node's `getnewaddress "" pq` (tpq1z26xe87…), prevout 10 XNA, and
- * accepted by that node (testmempoolaccept "allowed": 1). */
+ * accepted by that node (testmempoolaccept "allowed": 1). Kept as a signing
+ * vector only: its sequence 0xfffffffd is rejected since the no-RBF sequence
+ * rule (bad-txns-rbf-sequence). */
 static const uint64_t NODE_V2_PREVOUT_AMOUNT = 1000000000ULL;
 static const char NODE_V2_SIGNED_HEX[] =
     "020000000001010f0c8895d014c86373b126151e1ee2157156dfed23f6e621552aae53890126"
