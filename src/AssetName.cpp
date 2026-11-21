@@ -199,7 +199,7 @@ AssetNameType assetDetectAndValidate(const char * name, bool testnet) {
     }
     if (name[0] == '&') {
         if (!testnet) return ASSET_NAME_INVALID;            /* DEPIN is testnet-only */
-        if (n > fullMax) return ASSET_NAME_INVALID;
+        if (n > rootSubMax) return ASSET_NAME_INVALID;
         return depinValid(name, n) ? ASSET_NAME_DEPIN : ASSET_NAME_INVALID;
     }
     if (memchr(name, '#', n)) {

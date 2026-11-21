@@ -304,6 +304,9 @@ MU_TEST(test_build_invalid_address_fails) {
 
 MU_TEST(test_encode_null_tag_legacy) {
     size_t bl = hx(BASE_MAIN, bufBase, sizeof(bufBase));
+    mu_assert(assetEncodeNullTagScript(bufBase, bl, "", true, bufEnc, sizeof(bufEnc)) == 0, "empty qualifier");
+    mu_assert(assetEncodeNullRestrictionScript(bufBase, bl, "", 1, bufEnc, sizeof(bufEnc)) == 0, "empty address restriction");
+    mu_assert(assetEncodeGlobalRestrictionScript("", 1, bufEnc, sizeof(bufEnc)) == 0, "empty global restriction");
     size_t n = assetEncodeNullTagScript(bufBase, bl, "#KYC", true, bufEnc, sizeof(bufEnc));
     eqHex(bufEnc, n, "c0147e467332d7bf7d6f85673f075bf1c70f99b7b1f60604234b594301", "encode null tag legacy");
     n = assetEncodeNullTagScript(bufBase, bl, "#KYC", false, bufEnc, sizeof(bufEnc));
@@ -689,6 +692,13 @@ MU_TEST(test_name_length_limits) {
     mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_ROOT,    "120 chars valid on testnet");
     buf[120] = 'A'; buf[121] = '\0';
     mu_assert(assetDetectAndValidate(buf, true)  == ASSET_NAME_INVALID, "121 chars invalid on testnet");
+
+    buf[0] = '&'; buf[120] = 0;
+    mu_assert(assetDetectAndValidate(buf, true) == ASSET_NAME_DEPIN, "120-char DePIN");
+    buf[120] = 'A';
+    mu_assert(assetDetectAndValidate(buf, true) == ASSET_NAME_INVALID, "121-char DePIN");
+    buf[120] = '!';
+    mu_assert(assetDetectAndValidate(buf, true) == ASSET_NAME_OWNER, "121-char DePIN owner");
 
     /* Full-name types use the complete cap: owner 31 ok on mainnet, 32 not. */
     memset(buf, 'A', sizeof(buf));

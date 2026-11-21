@@ -354,10 +354,15 @@ size_t assetEncodeReissuePayload(const char * name, uint64_t quantityRaw,
     return b.ok ? b.len : 0;
 }
 
+static bool validAssetDestination(const uint8_t * base, size_t len) {
+    if (!base || leadingBaseLen(base, len) != len) return false;
+    return len == 25 || (len == 34 && base[0] >= OP_1 && base[0] <= OP_3);
+}
+
 size_t assetWrapScript(const uint8_t * base, size_t baseLen,
                        const uint8_t * payload, size_t payloadLen,
                        uint8_t * out, size_t cap) {
-    if (!base || !payload) return 0;
+    if (!payload || !validAssetDestination(base, baseLen)) return 0;
     Buf b = { out, cap, 0, true };
     bputn(&b, base, baseLen);
     bput(&b, OP_XNA_ASSET);
@@ -414,6 +419,7 @@ size_t assetEncodeReissueScript(const uint8_t * base, size_t baseLen,
  * Write the embedded destination: OP_XNA_ASSET pushData(hash20) for a P2PKH
  * base, or OP_XNA_ASSET OP_n pushData(commitment32) for an AuthScript base (n = 1, 2, 3). */
 static bool bNullDest(Buf * b, const uint8_t * base, size_t baseLen) {
+    if (!validAssetDestination(base, baseLen)) return false;
     /* P2PKH: OP_DUP OP_HASH160 0x14 <20> OP_EQUALVERIFY OP_CHECKSIG → hash at +3 */
     if (baseLen == 25 && base[0] == OP_DUP && base[1] == OP_HASH160 && base[2] == 20) {
         bput(b, OP_XNA_ASSET);
@@ -434,7 +440,7 @@ static bool bNullDest(Buf * b, const uint8_t * base, size_t baseLen) {
 static size_t encodeNullAddrScript(const uint8_t * base, size_t baseLen,
                                    const char * name, uint8_t flag,
                                    uint8_t * out, size_t cap) {
-    if (!base || !name) return 0;
+    if (!base || !name || !name[0]) return 0;
     Buf b = { out, cap, 0, true };
     if (!bNullDest(&b, base, baseLen)) return 0;
     uint8_t pl[NEURAI_ASSET_NAME_MAX + 16];
@@ -473,7 +479,7 @@ size_t assetEncodeVerifierScript(const char * verifierString, uint8_t * out, siz
 
 size_t assetEncodeGlobalRestrictionScript(const char * assetName, uint8_t freezeFlag,
                                           uint8_t * out, size_t cap) {
-    if (!assetName) return 0;
+    if (!assetName || !assetName[0]) return 0;
     Buf b = { out, cap, 0, true };
     bput(&b, OP_XNA_ASSET);
     bput(&b, OP_RESERVED);
